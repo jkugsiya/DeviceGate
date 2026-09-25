@@ -5,13 +5,14 @@ import { usageEvents } from "../lib/db/schema";
 import { createDevice } from "../lib/devices";
 import {
   dailySeries,
+  hourlySeries,
   listRequests,
   resolveRange,
   usageByDevice,
   usageByModel,
   usageSummary,
 } from "../lib/usage-queries";
-import { dayKey, dayStartAt, dayStartOf } from "../lib/timezone";
+import { dayKey, dayStartAt, dayStartOf, HOUR_MS, hourStartAt } from "../lib/timezone";
 
 const actor: Actor = { adminUserId: "admin-1", ip: "10.0.0.5", userAgent: "test" };
 const DAY = 86_400_000;
@@ -226,6 +227,23 @@ describe("dailySeries", () => {
     record({ at: Date.parse("2026-09-21T19:00:00Z"), cost: 2 });
     const series = dailySeries({ from: dayStartAt(NOW), to: null }, NOW);
     expect(series).toEqual([{ day: "2026-09-22", requests: 1, tokens: 0, cost: 2 }]);
+  });
+});
+
+describe("hourlySeries", () => {
+  it("buckets by IST hour, which starts at :30 UTC, and zero-fills quiet hours", () => {
+    // NOW is 17:30 IST, so the current local hour began at 11:30 UTC.
+    expect(hourStartAt(NOW)).toBe(Date.parse("2026-09-22T11:30:00Z"));
+    record({ at: Date.parse("2026-09-22T11:29:59Z"), input: 1 }); // 16:59 IST
+    record({ at: Date.parse("2026-09-22T11:30:00Z"), input: 10 }); // 17:00 IST
+    record({ at: Date.parse("2026-09-22T11:55:00Z"), input: 100 });
+    const series = hourlySeries({ from: hourStartAt(NOW) - 2 * HOUR_MS, to: null }, NOW);
+    expect(series.map((p) => new Date(p.start).toISOString())).toEqual([
+      "2026-09-22T09:30:00.000Z",
+      "2026-09-22T10:30:00.000Z",
+      "2026-09-22T11:30:00.000Z",
+    ]);
+    expect(series.map((p) => p.tokens)).toEqual([0, 1, 110]);
   });
 });
 

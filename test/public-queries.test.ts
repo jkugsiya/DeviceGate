@@ -3,7 +3,8 @@ import type { Actor } from "../lib/audit";
 import { type DB, migrateDb, openDb } from "../lib/db/client";
 import { upstreamQuota, usageEvents } from "../lib/db/schema";
 import { createDevice, setDeviceStatus } from "../lib/devices";
-import { publicSnapshot } from "../lib/public-queries";
+import { publicSnapshot, usageTotals, usageTrend } from "../lib/public-queries";
+import { dayStartAt } from "../lib/timezone";
 
 const actor: Actor = { adminUserId: "admin-1", ip: "10.0.0.5", userAgent: "test" };
 const globalForDb = globalThis as unknown as { __gatewayDb?: DB };
@@ -117,5 +118,65 @@ describe("publicSnapshot leaderboard", () => {
   it("clamps a utilisation above 100% to zero remaining rather than a negative", () => {
     db.insert(upstreamQuota).values({ id: 1, fiveHourUtil: 1.4, raw: {}, updatedAt: new Date() }).run();
     expect(publicSnapshot().quota.fiveHourRemaining).toBe(0);
+  });
+});
+
+describe("usage totals and trend", () => {
+  // 17:30 IST; local midnight was 18:30 UTC the day before.
+  const NOW = Date.parse("2026-09-22T12:00:00Z");
+
+  function record(deviceId: string, at: number, tokens: number, cost: number | null) {
+    db.insert(usageEvents)
+      .values({
+        requestId: crypto.randomUUID(),
+        deviceId,
+        ts: new Date(at),
+        endpoint: "messages",
+        model: "claude-sonnet-5",
+        inputTokens: tokens,
+        costUsd: cost,
+        statusCode: 200,
+        latencyMs: 10,
+      })
+      .run();
+  }
+
+  it("splits today from all time at local midnight and counts every device", () => {
+    const a = createDevice(db, actor, { name: "a" }).id;
+    const off = createDevice(db, actor, { name: "off" }).id;
+    record(a, Date.parse("2026-09-01T08:00:00Z"), 1000, 5);
+    record(a, dayStartAt(NOW) - 1, 200, 2); // 23:59:59.999 IST yesterday
+    record(a, dayStartAt(NOW), 30, 0.5);
+    record(off, NOW, 4, null); // unpriced model: tokens count, cost doesn't
+    setDeviceStatus(db, actor, off, "disabled");
+
+    const t = usageTotals(NOW);
+    expect(t.allTime).toEqual({ tokens: 1234, cost: 7.5 });
+    expect(t.today).toEqual({ tokens: 34, cost: 0.5 });
+    expect(t.since?.toISOString()).toBe("2026-09-01T08:00:00.000Z");
+  });
+
+  it("is all zeroes with no start date before any traffic", () => {
+    expect(usageTotals(NOW)).toEqual({ allTime: { tokens: 0, cost: 0 }, today: { tokens: 0, cost: 0 }, since: null });
+  });
+
+  it("shows the last 24 hours by hour and longer ranges by day", () => {
+    const a = createDevice(db, actor, { name: "a" }).id;
+    record(a, NOW - 30 * 60_000, 10, 1);
+    record(a, NOW - 3 * 86_400_000, 20, 2);
+
+    const day = usageTrend("1d", NOW);
+    expect(day.bucket).toBe("hour");
+    expect(day.points).toHaveLength(24);
+    expect(day.total).toEqual({ tokens: 10, cost: 1 });
+
+    const week = usageTrend("7d", NOW);
+    expect(week.bucket).toBe("day");
+    expect(week.points).toHaveLength(7);
+    expect(week.points.at(-1)!.start).toBe(dayStartAt(NOW));
+    expect(week.total).toEqual({ tokens: 30, cost: 3 });
+
+    // "all" starts at the first recorded day rather than an arbitrary cutoff.
+    expect(usageTrend("all", NOW).points).toHaveLength(4);
   });
 });

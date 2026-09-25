@@ -65,6 +65,18 @@ export function dayStartAt(at: number, tz = TIME_ZONE): number {
   return dayStartOf(dayKey(at, tz), tz);
 }
 
+export const HOUR_MS = 3_600_000;
+
+/**
+ * Epoch ms of the start of the local hour containing `at`. Not simply a multiple of an hour: in a
+ * +05:30 zone local hours begin at :30 UTC.
+ */
+export function hourStartAt(at: number, tz = TIME_ZONE): number {
+  const offset = wallClock(at, tz) - Math.floor(at / 1000) * 1000;
+  const local = at + offset;
+  return at - (((local % HOUR_MS) + HOUR_MS) % HOUR_MS);
+}
+
 /** The day key `n` days after `key` (negative goes back). */
 export function addDays(key: string, n: number): string {
   return new Date(Date.parse(`${key}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);

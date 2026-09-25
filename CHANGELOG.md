@@ -18,5 +18,6 @@ First public release.
 - Usage explorer with per-device, per-model and per-day breakdowns, and API-equivalent cost tracking.
 - Subscription 5-hour and weekly capacity read from upstream response headers.
 - Admin UI with an audit log of every change and sign-in attempt.
-- Public status page with remaining capacity and device rankings.
+- Public status page with remaining capacity, all-time and today totals, a usage-over-time chart
+  (1D / 7D / 30D / 90D / All) and device rankings.
 - Configurable `TIMEZONE` for quota windows, with DST handled.

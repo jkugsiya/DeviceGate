@@ -261,8 +261,9 @@ flags as "no price", run `bun run recompute-costs`.
 <img src="docs/screenshots/status.png" alt="Public status page" width="600">
 
 `/` needs no login. It shows the subscription capacity left in the current 5-hour and weekly
-windows, and this week's devices ranked by tokens and by cost. Only device **names** and totals
-appear there (`lib/public-queries.ts` selects nothing else). If the gateway can be reached beyond
+windows, tokens and API-equivalent cost all time and today, a chart of either over the last 24
+hours (by hour) or 7, 30, 90 days or all time (by day), and this week's devices ranked by tokens and
+by cost. Only device **names** and totals appear there (`lib/public-queries.ts` selects nothing else). If the gateway can be reached beyond
 your LAN, restrict `/` at your reverse proxy.
 
 ## Moving to a new gateway machine

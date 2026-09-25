@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, isNotNull, isNull, lt, or, type SQL, sql } from "drizzle-orm";
 import { db } from "./db/client";
 import { devices, usageEvents } from "./db/schema";
-import { addDays, dayKey, dayStartOf } from "./timezone";
+import { addDays, dayKey, dayStartOf, HOUR_MS, hourStartAt } from "./timezone";
 
 /**
  * Read models for the usage explorer. Every figure here is scoped by one `UsageFilters`, so the
@@ -222,11 +222,9 @@ export type DayPoint = { day: string; requests: number; tokens: number; cost: nu
 const SLOT_MS = 15 * 60_000;
 const slotExpr = sql<number>`${usageEvents.ts} / ${SLOT_MS}`;
 
-/**
- * One point per local calendar day. Days with no traffic are filled in with zeroes so the chart
- * shows a real gap instead of joining across it.
- */
-export function dailySeries(f: UsageFilters, now = Date.now()): DayPoint[] {
+type SlotTotal = { slot: number; requests: number; tokens: number; cost: number };
+
+function slotTotals(f: UsageFilters): SlotTotal[] {
   const base = db()
     .select({
       slot: slotExpr,
@@ -236,21 +234,36 @@ export function dailySeries(f: UsageFilters, now = Date.now()): DayPoint[] {
     })
     .from(usageEvents);
   const q = needsDeviceJoin(f) ? base.innerJoin(devices, eq(devices.id, usageEvents.deviceId)) : base;
-  const slots = q.where(where(f)).groupBy(slotExpr).orderBy(asc(slotExpr)).all();
-  if (slots.length === 0 && f.from === null) return [];
+  return q.where(where(f)).groupBy(slotExpr).orderBy(asc(slotExpr)).all();
+}
 
-  const found = new Map<string, DayPoint>();
+/** Sums slots into buckets named by `bucketOf`, in first-seen order. */
+function foldSlots<K>(slots: SlotTotal[], bucketOf: (at: number) => K): Map<K, Omit<SlotTotal, "slot">> {
+  const found = new Map<K, Omit<SlotTotal, "slot">>();
   for (const s of slots) {
-    const day = dayKey(s.slot * SLOT_MS);
-    const p = found.get(day);
+    const key = bucketOf(s.slot * SLOT_MS);
+    const p = found.get(key);
     if (p) {
       p.requests += s.requests;
       p.tokens += s.tokens;
       p.cost += s.cost;
     } else {
-      found.set(day, { day, requests: s.requests, tokens: s.tokens, cost: s.cost });
+      found.set(key, { requests: s.requests, tokens: s.tokens, cost: s.cost });
     }
   }
+  return found;
+}
+
+const EMPTY = { requests: 0, tokens: 0, cost: 0 };
+
+/**
+ * One point per local calendar day. Days with no traffic are filled in with zeroes so the chart
+ * shows a real gap instead of joining across it.
+ */
+export function dailySeries(f: UsageFilters, now = Date.now()): DayPoint[] {
+  const slots = slotTotals(f);
+  if (slots.length === 0 && f.from === null) return [];
+  const found = foldSlots(slots, (at) => dayKey(at));
 
   // An open-ended range still needs bounds to iterate; fall back to what the data covers.
   const todayKey = dayKey(now);
@@ -259,7 +272,28 @@ export function dailySeries(f: UsageFilters, now = Date.now()): DayPoint[] {
   const lastKey = toKey < todayKey ? toKey : todayKey;
   const out: DayPoint[] = [];
   for (let day = firstKey; day <= lastKey; day = addDays(day, 1)) {
-    out.push(found.get(day) ?? { day, requests: 0, tokens: 0, cost: 0 });
+    out.push({ day, ...(found.get(day) ?? EMPTY) });
+  }
+  return out;
+}
+
+/** `start` is epoch ms of the local hour's first instant. */
+export type HourPoint = { start: number; requests: number; tokens: number; cost: number };
+
+/**
+ * One point per local hour, zero-filled like `dailySeries`. Meant for short windows — a day or two
+ * — where a single daily bar would say nothing about when the traffic happened.
+ */
+export function hourlySeries(f: UsageFilters, now = Date.now()): HourPoint[] {
+  const slots = slotTotals(f);
+  if (slots.length === 0 && f.from === null) return [];
+  const found = foldSlots(slots, (at) => hourStartAt(at));
+
+  const first = hourStartAt(f.from ?? (slots.length ? slots[0].slot * SLOT_MS : now));
+  const last = hourStartAt(f.to === null ? now : Math.min(f.to - 1, now));
+  const out: HourPoint[] = [];
+  for (let start = first; start <= last; start += HOUR_MS) {
+    out.push({ start, ...(found.get(start) ?? EMPTY) });
   }
   return out;
 }
