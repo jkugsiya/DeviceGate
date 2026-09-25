@@ -1,12 +1,7 @@
 version: 2
 updates:
-  - package-ecosystem: bun
-    directory: /
-    schedule:
-      interval: monthly
-    groups:
-      dependencies:
-        patterns: ["*"]
+  # No "bun" entry yet: Dependabot can't parse bun.lock lockfileVersion 2 (Bun 1.4+). Add it back
+  # once it can; until then, check `bun outdated` by hand.
   - package-ecosystem: github-actions
     directory: /
     schedule:
