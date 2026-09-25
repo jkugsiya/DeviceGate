@@ -1,0 +1,49 @@
+name: Bug report
+description: Something isn't working as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please **don't paste device tokens, setup codes, `.env.local` values or TeamClaude config** into this issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add a device with ...
+        2. Run `claude` on the PC ...
+        3. See error ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Gateway logs (e.g. `journalctl --user -u devicegate -n 50`) and the error Claude Code showed. Redact anything secret.
+      render: text
+  - type: input
+    id: devicegate-version
+    attributes:
+      label: DeviceGate version or commit
+      placeholder: "0.1.0 or a commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: claude-code-version
+    attributes:
+      label: Claude Code version (`claude --version`)
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "Gateway: Ubuntu 24.04, Node 22, Bun 1.4. Client: Windows 11"

@@ -1,0 +1,1 @@
+CREATE INDEX `usage_events_ts_idx` ON `usage_events` (`ts`);
