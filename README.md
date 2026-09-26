@@ -171,6 +171,23 @@ Everything is set in `.env.local`. [`.env.example`](.env.example) documents the 
 | `TIMEZONE` | no | IANA zone for quota windows and admin times, e.g. `Europe/Berlin`. Days start at local midnight and weeks on Monday. Default: the server's zone. |
 | `GATEWAY_PUBLIC_URL` | no | The URL written into each device's `ANTHROPIC_BASE_URL`. Defaults to `BETTER_AUTH_URL`. |
 
+## Run with Docker
+
+DeviceGate can run in a container instead of steps 5 and 6 of the Quick start. TeamClaude still
+runs on the host (steps 1 and 2), because it holds your Claude login and listens only on
+`127.0.0.1`. The container uses host networking to reach it, which works on Linux, or on Docker
+Desktop with host networking turned on.
+
+```sh
+bun run init-env                  # writes .env.local, as in step 3
+docker compose up -d --build
+docker compose exec -it devicegate bun run admin create you@example.com "Your Name"
+```
+
+The database lives in the `devicegate-data` volume, and migrations run on start. To update, run
+`git pull && docker compose up -d --build`. To move the database to another machine, stop the
+container and copy it out with `docker compose cp devicegate:/app/data ./data`.
+
 ## Run as a service
 
 On Linux, systemd user services keep both processes running across reboots.
@@ -293,8 +310,9 @@ beta flags that the subscription upstream needs, and DeviceGate adds them back
 ([`lib/proxy/betas.ts`](lib/proxy/betas.ts)). If a Claude Code release changes this, see
 [Protocol notes](docs/architecture.md#protocol-notes) for how to check, and please open an issue.
 
-**Can I run it in Docker or on Windows?** Neither is packaged yet. The gateway is tested on Linux.
-Contributions are welcome.
+**Can I run it in Docker or on Windows?** Docker, yes: see [Run with Docker](#run-with-docker).
+A Windows gateway isn't packaged yet (Windows PCs work fine as clients). The gateway is tested on
+Linux. Contributions are welcome.
 
 ## Contributing
 

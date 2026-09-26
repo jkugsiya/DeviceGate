@@ -21,3 +21,4 @@ First public release.
 - Public status page with remaining capacity, all-time and today totals, a usage-over-time chart
   (1D / 7D / 30D / 90D / All) and device rankings.
 - Configurable `TIMEZONE` for quota windows, with DST handled.
+- `Dockerfile` and `docker-compose.yml` for running the gateway in a container.
