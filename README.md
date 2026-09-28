@@ -14,7 +14,7 @@ can see exactly where your subscription's capacity went.
 your PCs ──(device token)──► DeviceGate :3000 ──► TeamClaude :3456 (holds your Claude login) ──► Anthropic
 ```
 
-![Admin overview](docs/screenshots/overview.png)
+![DeviceGate demo: status page, adding a device, per-device limits and the usage explorer](docs/screenshots/demo.gif)
 
 > [!IMPORTANT]
 > DeviceGate is for **your own machines on your own subscription**. Don't use it to share a Claude
