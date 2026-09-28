@@ -1,0 +1,21 @@
+# DeviceGate in Docker. TeamClaude runs on the host (see the README's Quick start, step 2) and
+# listens on 127.0.0.1:3456, so the gateway shares the host's network to reach it.
+#
+#   bun run init-env                  # or copy .env.example to .env.local and fill it in
+#   docker compose up -d --build
+#   docker compose exec -it devicegate bun run admin create you@example.com "Your Name"
+
+services:
+  devicegate:
+    build: .
+    image: devicegate
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env.local
+    environment:
+      DATABASE_PATH: /app/data/gateway.db
+    volumes:
+      - devicegate-data:/app/data
+
+volumes:
+  devicegate-data:
