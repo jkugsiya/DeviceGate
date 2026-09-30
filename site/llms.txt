@@ -1,0 +1,23 @@
+# DeviceGate
+
+> Self-hosted gateway that gives each of your machines its own revocable key, model access, limits and usage tracking for Claude Code, all on your one Claude subscription. MIT licensed.
+
+Your Claude login stays on one machine on your LAN (held by TeamClaude on loopback). Every other PC connects through DeviceGate on port 3000 with its own device token. DeviceGate checks the device's model allow-list and limits, forwards the request, and records token usage from the streamed response. Prompts and responses are never stored. It is one Next.js process and one SQLite file.
+
+It is for one person's own machines. Anthropic's Consumer Terms don't allow routing other people's requests through a Free, Pro or Max plan.
+
+## Docs
+
+- [README and quick start](https://github.com/jkugsiya/DeviceGate#readme): requirements, setup, configuration, running as a service, FAQ
+- [Architecture](https://github.com/jkugsiya/DeviceGate/blob/main/docs/architecture.md): request pipeline, data model, security model, protocol notes
+- [Source](https://github.com/jkugsiya/DeviceGate)
+
+## Features
+
+- Per-device tokens, revocable from the admin, stored only as hashes
+- Per-device model allow-lists that match by family prefix (Opus, Sonnet, Haiku)
+- Daily and weekly request and token quotas, requests per minute, concurrent requests
+- Usage by device, model and day, with API-equivalent cost
+- Remaining 5-hour and weekly subscription capacity from Anthropic's response headers
+- Audit log of admin actions and sign-ins
+- One-line device setup on macOS, Linux and Windows

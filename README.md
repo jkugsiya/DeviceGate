@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/jkugsiya/DeviceGate/actions/workflows/ci.yml/badge.svg)](https://github.com/jkugsiya/DeviceGate/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Website](https://img.shields.io/badge/website-jkugsiya.github.io%2FDeviceGate-12161c.svg)](https://jkugsiya.github.io/DeviceGate/)
 
 **A self-hosted gateway that gives each of your machines its own key, model access, limits and
 usage history for Claude Code, all on your one Claude subscription.**

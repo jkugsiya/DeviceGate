@@ -1,0 +1,54 @@
+<!doctype html>
+<!-- Source for og.png. Regenerate from the repo root with:
+     chromium --headless=new --hide-scrollbars --window-size=1200,630 --virtual-time-budget=3000 \
+       --screenshot=site/og.png "file://$PWD/site/og.html" -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; width: 1200px; height: 630px; overflow: hidden;
+      background: #f3f5f7; color: #12161c; font-family: "IBM Plex Sans", sans-serif;
+      display: grid; grid-template-columns: 1fr 470px; gap: 40px; padding: 64px 64px 56px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; font: 600 26px "IBM Plex Sans"; }
+    .mark { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 11px; background: #12161c; color: #f3f5f7; font: 700 18px "IBM Plex Sans"; }
+    h1 { margin: 40px 0 0; font: 700 70px/0.98 "Barlow Condensed"; text-transform: uppercase; }
+    p { margin: 24px 0 0; font-size: 22px; line-height: 1.4; color: #5b6573; }
+    .url { position: absolute; left: 64px; bottom: 52px; font: 500 20px "JetBrains Mono"; color: #2b6fd6; }
+    .panel { align-self: center; display: grid; grid-template-columns: 1fr 26px 48px; gap: 0; padding: 22px; background: #fff; border: 1px solid #d5dae0; border-radius: 18px; }
+    .lanes { display: grid; gap: 12px; }
+    .lane { display: grid; grid-template-columns: 230px 1fr; align-items: center; }
+    .tag { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #d5dae0; border-radius: 10px; background: #f3f5f7; font: 600 19px "IBM Plex Sans"; }
+    .led { width: 9px; height: 9px; border-radius: 50%; background: #1fae6b; }
+    .lane .wire { height: 2px; background: #d5dae0; position: relative; }
+    .lane .wire i { position: absolute; top: -5px; width: 12px; height: 12px; border-radius: 3px; background: #2b6fd6; }
+    .lane.no .wire i { background: #e0592a; right: 0; }
+    .gate { grid-column: 3; background: #12161c; border-radius: 10px; display: grid; place-items: center; }
+    .gate span { writing-mode: vertical-rl; transform: rotate(180deg); color: #f3f5f7; font: 700 24px "Barlow Condensed"; letter-spacing: 0.12em; text-transform: uppercase; }
+    .err { grid-column: 1 / -1; margin-top: 16px; padding: 12px 14px; border-radius: 10px; background: #12161c; color: #ff9a70; font: 500 14px/1.5 "JetBrains Mono"; }
+  </style>
+</head>
+<body>
+  <div>
+    <div class="brand"><span class="mark">DG</span>DeviceGate</div>
+    <h1>One Claude login.<br>A separate key for every machine.</h1>
+    <p>Self-hosted gateway for Claude Code: per-device tokens, model access, limits and usage.</p>
+  </div>
+  <div class="panel">
+    <div class="lanes">
+      <div class="lane"><span class="tag"><span class="led"></span>Workstation</span><span class="wire"><i style="left:30%"></i></span></div>
+      <div class="lane"><span class="tag"><span class="led"></span>MacBook Pro</span><span class="wire"><i style="left:65%"></i></span></div>
+      <div class="lane"><span class="tag"><span class="led"></span>ThinkPad</span><span class="wire"></span></div>
+      <div class="lane no"><span class="tag"><span class="led"></span>Home server</span><span class="wire"><i></i></span></div>
+    </div>
+    <div></div>
+    <div class="gate"><span>DeviceGate</span></div>
+    <div class="err">403 MODEL_NOT_ALLOWED: claude-opus-5-5 is not allowed for this device.</div>
+  </div>
+  <div class="url">github.com/jkugsiya/DeviceGate</div>
+</body>
+</html>

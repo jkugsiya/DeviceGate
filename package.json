@@ -4,7 +4,7 @@
   "description": "Self-hosted gateway that gives each of your machines its own key, model access, limits and usage tracking for Claude Code on your Claude subscription.",
   "license": "MIT",
   "author": "Jayesh Kugsiya",
-  "homepage": "https://github.com/jkugsiya/DeviceGate#readme",
+  "homepage": "https://jkugsiya.github.io/DeviceGate/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jkugsiya/DeviceGate.git"
