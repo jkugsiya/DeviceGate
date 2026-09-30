@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeviceGate: per-device keys, limits and usage for Claude Code</title>
+  <meta name="description" content="A self-hosted gateway that gives each of your machines its own revocable key, model access, limits and usage history for Claude Code, all on your one Claude subscription.">
+  <link rel="canonical" href="https://jkugsiya.github.io/DeviceGate/">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#12161c">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="DeviceGate">
+  <meta property="og:title" content="DeviceGate: one Claude login, a separate key for every machine">
+  <meta property="og:description" content="Self-hosted gateway for Claude Code. Per-device tokens, model allow-lists, quotas and usage tracking on your one subscription. MIT licensed.">
+  <meta property="og:url" content="https://jkugsiya.github.io/DeviceGate/">
+  <meta property="og:image" content="https://jkugsiya.github.io/DeviceGate/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "DeviceGate",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS (gateway); macOS, Linux, Windows (clients)",
+    "description": "Self-hosted gateway that gives each of your machines its own key, model access, limits and usage tracking for Claude Code on your Claude subscription.",
+    "license": "https://opensource.org/licenses/MIT",
+    "codeRepository": "https://github.com/jkugsiya/DeviceGate",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "author": { "@type": "Person", "name": "Jayesh Kugsiya" }
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top wrap">
+    <a class="brand" href="./" aria-label="DeviceGate home"><span class="mark">DG</span>DeviceGate</a>
+    <nav aria-label="Primary">
+      <a href="#controls">Features</a>
+      <a href="#setup">Setup</a>
+      <a href="https://github.com/jkugsiya/DeviceGate/blob/main/docs/architecture.md">Architecture</a>
+      <a class="gh" href="https://github.com/jkugsiya/DeviceGate">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        Star on GitHub
+      </a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero wrap">
+      <p class="eyebrow">Self-hosted gateway for Claude Code · MIT</p>
+      <h1>One Claude login.<br>A separate key for every machine.</h1>
+      <p class="lede">Your subscription stays on one box on your LAN. Every other PC connects with its own
+        revocable device token, its own model allow-list and limits, and its own usage history.
+        Now you can see which machine used up your weekly limit.</p>
+      <div class="actions">
+        <a class="btn primary" href="#setup">Set it up in 10 minutes</a>
+        <a class="btn" href="https://github.com/jkugsiya/DeviceGate">View the source</a>
+      </div>
+
+      <!-- Signature: live patch panel. Each lane is a device; packets travel into the gate.
+           The home server asks for Opus and is refused, with the exact error Claude Code shows. -->
+      <figure class="panel" aria-label="Diagram: four PCs connect through DeviceGate to one Claude subscription. The home server is only allowed Haiku and Sonnet, so its Opus request is refused.">
+        <div class="lanes">
+          <div class="lane" data-lane="0">
+            <div class="tag">
+              <span class="led"></span>
+              <span class="name">Workstation</span>
+              <span class="models"><b>opus</b><b>sonnet</b><b>haiku</b></span>
+              <span class="meter"><i style="--v:.42"></i></span>
+              <span class="meta">412K / 1M tokens today</span>
+            </div>
+            <div class="wire"></div>
+          </div>
+          <div class="lane" data-lane="1">
+            <div class="tag">
+              <span class="led"></span>
+              <span class="name">MacBook Pro</span>
+              <span class="models"><b>opus</b><b>sonnet</b><b>haiku</b></span>
+              <span class="meter"><i style="--v:.61"></i></span>
+              <span class="meta">610K / 1M tokens today</span>
+            </div>
+            <div class="wire"></div>
+          </div>
+          <div class="lane" data-lane="2">
+            <div class="tag">
+              <span class="led"></span>
+              <span class="name">ThinkPad</span>
+              <span class="models"><s>opus</s><b>sonnet</b><b>haiku</b></span>
+              <span class="meter"><i style="--v:.18"></i></span>
+              <span class="meta">90K / 500K tokens today</span>
+            </div>
+            <div class="wire"></div>
+          </div>
+          <div class="lane blocked" data-lane="3">
+            <div class="tag">
+              <span class="led"></span>
+              <span class="name">Home server</span>
+              <span class="models"><s>opus</s><b>sonnet</b><b>haiku</b></span>
+              <span class="meter"><i style="--v:.43"></i></span>
+              <span class="meta">1.3M / 3M tokens today</span>
+            </div>
+            <div class="wire"></div>
+          </div>
+        </div>
+        <div class="gate" aria-hidden="true">
+          <span class="gate-name">DeviceGate</span>
+          <span class="gate-port">:3000</span>
+        </div>
+        <div class="trunk" aria-hidden="true"><div class="wire"></div></div>
+        <div class="upstream">
+          <span class="label">Your Claude subscription</span>
+          <span class="sub">one login, never leaves this machine</span>
+          <span class="cap"><em>5-hour</em><span class="meter"><i style="--v:.38"></i></span></span>
+          <span class="cap"><em>Weekly</em><span class="meter"><i style="--v:.57"></i></span></span>
+        </div>
+        <figcaption class="console" aria-live="off">
+          <span class="prompt">home-server $ claude --model opus</span>
+          <span class="err">403 MODEL_NOT_ALLOWED: claude-opus-5-5 is not allowed for this device. Switch models with /model.</span>
+        </figcaption>
+      </figure>
+    </section>
+
+    <section id="controls" class="wrap block">
+      <div class="head">
+        <h2>What you set for each machine</h2>
+        <p>Nothing is patched on the PC. The setup script only points Claude Code at the gateway, so plain
+          <code>claude</code> keeps working.</p>
+      </div>
+      <div class="spec">
+        <dl>
+          <div><dt>Key</dt><dd>A device token you can revoke from the admin at any time. Tokens and setup codes are stored only as hashes.</dd></div>
+          <div><dt>Models</dt><dd>An allow-list by family: Opus on the workstation, only Haiku on the automation box. New model versions are covered automatically.</dd></div>
+          <div><dt>Limits</dt><dd>Daily and weekly request and token quotas, requests per minute and concurrent requests. Over the limit, Claude Code shows a readable error with the reset time.</dd></div>
+          <div><dt>Usage</dt><dd>Input, output and cache tokens for every request, plus what they would have cost at API rates, by device, model and day.</dd></div>
+          <div><dt>Capacity</dt><dd>The 5-hour and weekly utilization left on your plan, read from Anthropic's own response headers.</dd></div>
+          <div><dt>Audit</dt><dd>Every admin action and sign-in attempt, with before and after values.</dd></div>
+        </dl>
+        <a class="shot" href="screenshots/device.png"><img src="img/device-limits.png" alt="The home server's device page: Haiku and Sonnet allowed, Opus not, and a 3M tokens-per-day limit" loading="lazy" width="1400" height="684"></a>
+      </div>
+    </section>
+
+    <section class="wrap block">
+      <div class="head">
+        <h2>See where your capacity went</h2>
+        <p>Break usage down by device, model and day. Every filter lives in the URL, so any view can be bookmarked.</p>
+      </div>
+      <div class="gallery">
+        <a class="shot wide" href="screenshots/overview.png"><img src="screenshots/overview.png" alt="Admin overview with today's cost, tokens, requests, subscription capacity and a table of devices" loading="lazy" width="2560" height="1720"></a>
+        <a class="shot" href="screenshots/usage.png"><img src="screenshots/usage.png" alt="Usage explorer with charts by device and model" loading="lazy" width="2560" height="1720"></a>
+        <a class="shot" href="screenshots/status.png"><img src="screenshots/status.png" alt="Public status page with capacity left and weekly leaderboards" loading="lazy" width="2560" height="1720"></a>
+      </div>
+    </section>
+
+    <section id="setup" class="wrap block">
+      <div class="head">
+        <h2>Setup</h2>
+        <p>You need an always-on Linux or macOS machine with Node.js 20.9+, Bun and a Claude Pro or Max plan.</p>
+      </div>
+      <ol class="steps">
+        <li>
+          <h3>Sign in once, on the gateway machine</h3>
+          <p><a href="https://github.com/KarpelesLab/teamclaude">TeamClaude</a> holds your Claude login through Anthropic's own OAuth flow and listens only on loopback.</p>
+          <pre><code>bun add -g @karpeleslab/teamclaude
+teamclaude login
+teamclaude server --headless</code></pre>
+        </li>
+        <li>
+          <h3>Start DeviceGate next to it</h3>
+          <p>One Next.js process and one SQLite file. No Redis, Postgres or Docker.</p>
+          <pre><code>git clone https://github.com/jkugsiya/DeviceGate.git
+cd DeviceGate &amp;&amp; bun install
+bun run init-env
+bun run admin create you@example.com "Your Name"
+bun run build &amp;&amp; bun run start</code></pre>
+        </li>
+        <li>
+          <h3>Add a device and run its one-liner</h3>
+          <p>The admin shows a single-use code that expires in 15 minutes. PowerShell works too.</p>
+          <pre><code>curl -fsSL http://192.168.1.50:3000/setup.sh | sh -s -- K7QM-2XPA</code></pre>
+        </li>
+      </ol>
+      <p class="more">Services, updates and configuration are in the <a href="https://github.com/jkugsiya/DeviceGate#quick-start">README</a>.</p>
+    </section>
+
+    <section class="wrap block terms">
+      <h2>For your own machines only</h2>
+      <p>DeviceGate is built for one person and their own devices. Anthropic's
+        <a href="https://www.anthropic.com/legal/consumer-terms">Consumer Terms</a> don't allow routing other people's
+        requests through a Free, Pro or Max plan, so never give a device token to anyone else. Prompts and responses
+        are never stored, and the gateway is meant to stay on your LAN or behind a VPN.</p>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <p>MIT licensed · by <a href="https://github.com/jkugsiya">Jayesh Kugsiya</a> · built on
+      <a href="https://github.com/KarpelesLab/teamclaude">TeamClaude</a></p>
+    <p>DeviceGate isn't affiliated with or endorsed by Anthropic. "Claude" and "Claude Code" are trademarks of Anthropic, PBC.</p>
+  </footer>
+
+  <script src="panel.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /og.html
+
+Sitemap: https://jkugsiya.github.io/DeviceGate/sitemap.xml
