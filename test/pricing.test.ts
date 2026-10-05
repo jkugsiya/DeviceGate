@@ -20,6 +20,12 @@ describe("ratesFor", () => {
     expect(ratesFor("claude-opus-4-5-20251101")?.input).toBe(5);
   });
 
+  it("never prices a newer point release at an older one's rate", () => {
+    expect(ratesFor("claude-opus-5-5")).toEqual({ input: 4, output: 20, cacheWrite5m: 5, cacheWrite1h: 8, cacheRead: 0.2 });
+    expect(ratesFor("claude-opus-5-20260301")?.input).toBe(5);
+    expect(ratesFor("claude-opus-5-7")).toBeNull();
+  });
+
   it("prices Fable 5.1 cache reads at 0.025x input", () => {
     expect(ratesFor("claude-fable-5-1")?.cacheRead).toBe(0.25);
     expect(ratesFor("claude-fable-5")?.cacheRead).toBe(1);

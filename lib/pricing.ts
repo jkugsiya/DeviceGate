@@ -7,8 +7,8 @@
  *
  * Rates are US$ per million tokens, from https://platform.claude.com/docs/en/about-claude/pricing.
  * Only input and output are listed because Anthropic derives the cache rates from input: a
- * 5-minute cache write costs 1.25x input, a 1-hour write 2x, and a cache read 0.1x (Fable 5.1
- * reads are the one exception, at 0.025x). ccusage and tokscale pull the same numbers from
+ * 5-minute cache write costs 1.25x input, a 1-hour write 2x, and a cache read 0.1x (the exceptions
+ * are Opus 5.5 at 0.05x and Fable/Mythos 5.1 at 0.025x). ccusage and tokscale pull the same numbers from
  * LiteLLM's price feed at runtime; a table of this size is not worth a network dependency.
  */
 
@@ -22,9 +22,12 @@ type PriceEntry = {
   cacheRead?: number;
 };
 
-// Keyed by model-id prefix; the longest match wins, so `claude-opus-4-1-20250805` prices as
-// Opus 4.1 rather than Opus 4, and undated aliases like `claude-opus-5` work unchanged.
+// Keyed by model id; a dated id like `claude-opus-4-1-20250805` matches its undated key. A newer
+// point release never inherits an older one's price (`claude-opus-5-5` does not match
+// `claude-opus-5`): it stays unpriced, and the admin flags it, until its own entry is added here.
+// Listed newest first within each family; familyRates() relies on that order.
 const PRICES: Record<string, PriceEntry> = {
+  "claude-opus-5-5": { base: { input: 4, output: 20 }, cacheRead: 0.05 },
   "claude-opus-5": { base: { input: 5, output: 25 } },
   "claude-opus-4-8": { base: { input: 5, output: 25 } },
   "claude-opus-4-7": { base: { input: 5, output: 25 } },
@@ -32,6 +35,7 @@ const PRICES: Record<string, PriceEntry> = {
   "claude-opus-4-5": { base: { input: 5, output: 25 } },
   "claude-opus-4-1": { base: { input: 15, output: 75 } },
   "claude-opus-4": { base: { input: 15, output: 75 } },
+  "claude-sonnet-5-5": { base: { input: 2, output: 10 } },
   "claude-sonnet-5": { base: { input: 2, output: 10 } },
   "claude-sonnet-4-6": { base: { input: 3, output: 15 } },
   "claude-sonnet-4-5": { base: { input: 3, output: 15 }, long: { input: 6, output: 22.5 } },
@@ -68,16 +72,15 @@ export type PricedUsage = {
   cacheRead: number;
 };
 
+// What may follow a key: nothing, or a suffix that isn't a minor version (`-5`, `-12-…`), which
+// would make it a different model. Dates (`-20250805`) and other suffixes are fine.
+const MINOR_VERSION = /^-\d{1,2}(?:-|$)/;
+
 function entryFor(model: string): PriceEntry | null {
-  let best: PriceEntry | null = null;
-  let bestLen = 0;
-  for (const [prefix, entry] of Object.entries(PRICES)) {
-    if (model.startsWith(prefix) && prefix.length > bestLen) {
-      best = entry;
-      bestLen = prefix.length;
-    }
+  for (const [key, entry] of Object.entries(PRICES)) {
+    if (model.startsWith(key) && !MINOR_VERSION.test(model.slice(key.length))) return entry;
   }
-  return best;
+  return null;
 }
 
 function ratesFrom(tier: Tier, cacheRead: number): Rates {
