@@ -153,7 +153,8 @@ export function DetailsForm({ deviceId, name, notes }: { deviceId: string; name:
   );
 }
 
-type LimitField = { name: string; label: string; value: number | null; hint?: string };
+// `usd` fields take dollar amounts with cents; the rest are whole numbers.
+type LimitField = { name: string; label: string; value: number | null; hint?: string; usd?: boolean };
 
 export function PolicyForm({
   deviceId,
@@ -195,8 +196,8 @@ export function PolicyForm({
               <Input
                 id={f.name}
                 name={f.name}
-                inputMode="numeric"
-                placeholder="Unlimited"
+                inputMode={f.usd ? "decimal" : "numeric"}
+                placeholder={f.usd ? "Unlimited ($)" : "Unlimited"}
                 defaultValue={f.value ?? ""}
                 className="font-mono tabular-nums"
               />

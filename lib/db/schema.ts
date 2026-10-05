@@ -70,6 +70,9 @@ export const devicePolicies = sqliteTable("device_policies", {
   weeklyRequests: integer("weekly_requests"),
   dailyTokens: integer("daily_tokens"),
   weeklyTokens: integer("weekly_tokens"),
+  // API-equivalent spend caps in USD, priced like usage_events.cost_usd (lib/pricing.ts).
+  dailyCostUsd: real("daily_cost_usd"),
+  weeklyCostUsd: real("weekly_cost_usd"),
   requestsPerMinute: integer("requests_per_minute"),
   maxConcurrent: integer("max_concurrent"),
 });

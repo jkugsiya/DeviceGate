@@ -9,8 +9,10 @@ export type DeviceCounters = {
   dayStart: number;
   dayRequests: number;
   dayTokens: number;
+  dayCost: number;
   weekRequests: number;
   weekTokens: number;
+  weekCost: number;
   // Admission timestamps within the last minute, oldest first.
   recent: number[];
   inflight: number;
@@ -22,10 +24,12 @@ const counters = (globalForCounters.__gatewayCounters ??= new Map());
 
 // Must match quotaTokens() in lib/proxy/usage.ts.
 const tokenSum = sql<number>`coalesce(sum(${usageEvents.inputTokens} + ${usageEvents.cacheCreationTokens} + ${usageEvents.outputTokens}), 0)`;
+// Requests on an unpriced model (NULL cost) count as free toward spend limits.
+const costSum = sql<number>`coalesce(sum(${usageEvents.costUsd}), 0)`;
 
 function loadTotals(db: DbOrTx, deviceId: string, since: number) {
   return db
-    .select({ requests: sql<number>`count(*)`, tokens: tokenSum })
+    .select({ requests: sql<number>`count(*)`, tokens: tokenSum, cost: costSum })
     .from(usageEvents)
     .where(
       and(
@@ -51,8 +55,10 @@ export function countersFor(db: DbOrTx, deviceId: string, now: number): DeviceCo
       dayStart: w.dayStart,
       dayRequests: day.requests,
       dayTokens: day.tokens,
+      dayCost: day.cost,
       weekRequests: week.requests,
       weekTokens: week.tokens,
+      weekCost: week.cost,
       recent: c?.recent ?? [],
       inflight: c?.inflight ?? 0,
     };
@@ -62,7 +68,11 @@ export function countersFor(db: DbOrTx, deviceId: string, now: number): DeviceCo
   return c;
 }
 
-export type Release = (tokens: number, at: number, opts?: { refund?: boolean }) => void;
+/** What a finished request consumed: quota tokens and API-equivalent USD (0 when unpriced). */
+export type Spent = { tokens: number; cost: number };
+export const NOTHING_SPENT: Spent = { tokens: 0, cost: 0 };
+
+export type Release = (spent: Spent, at: number, opts?: { refund?: boolean }) => void;
 
 /**
  * Books an admitted request. The returned release must run when the request ends; later calls
@@ -74,14 +84,16 @@ export function admit(c: DeviceCounters, now: number): Release {
   c.recent.push(now);
   c.inflight++;
   let released = false;
-  return (tokens, at, opts) => {
+  return (spent, at, opts) => {
     if (released) return;
     released = true;
     c.inflight--;
     // After a rollover the next countersFor() reloads from the DB, which already has this row.
     if (windowsAt(at).dayStart !== c.dayStart) return;
-    c.dayTokens += tokens;
-    c.weekTokens += tokens;
+    c.dayTokens += spent.tokens;
+    c.weekTokens += spent.tokens;
+    c.dayCost += spent.cost;
+    c.weekCost += spent.cost;
     if (opts?.refund) {
       c.dayRequests--;
       c.weekRequests--;

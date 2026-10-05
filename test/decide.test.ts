@@ -9,6 +9,8 @@ const noLimits: Limits = {
   weeklyRequests: null,
   dailyTokens: null,
   weeklyTokens: null,
+  dailyCostUsd: null,
+  weeklyCostUsd: null,
   requestsPerMinute: null,
   maxConcurrent: null,
 };
@@ -16,8 +18,10 @@ const idle: DeviceCounters = {
   dayStart: windowsAt(now).dayStart,
   dayRequests: 0,
   dayTokens: 0,
+  dayCost: 0,
   weekRequests: 0,
   weekTokens: 0,
+  weekCost: 0,
   recent: [],
   inflight: 0,
 };
@@ -66,6 +70,14 @@ describe("decide", () => {
     expect(!d.ok && d.retryAfterSec).toBe(12 * 3600); // noon → midnight IST
     expect(code(input({ limits: { weeklyRequests: 5 }, counters: { weekRequests: 5 } }))).toBe("QUOTA_EXCEEDED");
     expect(code(input({ limits: { dailyTokens: 1000 }, counters: { dayTokens: 999 } }))).toBe("OK");
+  });
+
+  it("denies once daily or weekly spend reaches its dollar limit", () => {
+    const d = decide(input({ limits: { dailyCostUsd: 5 }, counters: { dayCost: 5.01 } }));
+    expect(d).toMatchObject({ ok: false, status: 429, code: "QUOTA_EXCEEDED", retryAfterSec: 12 * 3600 });
+    expect(!d.ok && d.message).toContain("daily spend ($5.00)");
+    expect(code(input({ limits: { dailyCostUsd: 5 }, counters: { dayCost: 4.99 } }))).toBe("OK");
+    expect(code(input({ limits: { weeklyCostUsd: 20 }, counters: { weekCost: 20 } }))).toBe("QUOTA_EXCEEDED");
   });
 
   it("rate limits on requests in the last minute", () => {

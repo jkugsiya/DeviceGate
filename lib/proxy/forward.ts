@@ -5,7 +5,7 @@ import { authenticateDevice, type AuthenticatedDevice } from "../auth/device-tok
 import { config } from "../config";
 import { db } from "../db/client";
 import { devices, deviceTokens, usageEvents } from "../db/schema";
-import { admit, countersFor, type Release } from "../policy/counters";
+import { admit, countersFor, NOTHING_SPENT, type Release } from "../policy/counters";
 import { decide } from "../policy/decide";
 import { loadDevicePolicy, resolveModel } from "../policy/load";
 import { windowsAt } from "../policy/windows";
@@ -119,7 +119,7 @@ export async function proxyToUpstream(req: Request, endpoint: Endpoint): Promise
       signal: req.signal,
     });
   } catch (err) {
-    release?.(0, Date.now(), { refund: true });
+    release?.(NOTHING_SPENT, Date.now(), { refund: true });
     if (req.signal.aborted) return new Response(null, { status: 499 });
     console.error("[gateway] upstream unreachable:", err instanceof Error ? err.message : err);
     return anthropicError(502, "api_error", "Gateway could not reach the upstream proxy.");
@@ -132,7 +132,7 @@ export async function proxyToUpstream(req: Request, endpoint: Endpoint): Promise
 
   if (endpoint === "models") return filterModels(upstream, outHeaders, device.deviceId);
   if (endpoint !== "messages" || !upstream.body) {
-    release?.(0, Date.now());
+    release?.(NOTHING_SPENT, Date.now());
     return new Response(upstream.body, { status: upstream.status, headers: outHeaders });
   }
 
@@ -141,7 +141,7 @@ export async function proxyToUpstream(req: Request, endpoint: Endpoint): Promise
   const requestId = upstream.headers.get("request-id") ?? undefined;
 
   const metered = meterBody(upstream.body, kind, (result) => {
-    recordUsage(device, result.usage, {
+    const cost = recordUsage(device, result.usage, {
       requestId,
       endpoint,
       model,
@@ -150,7 +150,7 @@ export async function proxyToUpstream(req: Request, endpoint: Endpoint): Promise
       started,
       ip,
     });
-    release?.(quotaTokens(result.usage), Date.now());
+    release?.({ tokens: quotaTokens(result.usage), cost: cost ?? 0 }, Date.now());
   });
   return new Response(metered, { status: upstream.status, headers: outHeaders });
 }
@@ -183,8 +183,12 @@ type RecordMeta = {
   ip: string | null;
 };
 
-function recordUsage(device: AuthenticatedDevice, usage: Usage, meta: RecordMeta) {
+/** Persists the request and returns its priced cost (null when the model has no published rate). */
+function recordUsage(device: AuthenticatedDevice, usage: Usage, meta: RecordMeta): number | null {
   const now = new Date();
+  // Priced now rather than at read time so historical rows keep the rate that applied.
+  // `bun run recompute-costs` re-prices everything after a price-table change.
+  const costUsd = costOf(meta.model, usage);
   try {
     db().transaction((tx) => {
       tx.insert(usageEvents)
@@ -199,9 +203,7 @@ function recordUsage(device: AuthenticatedDevice, usage: Usage, meta: RecordMeta
           cacheCreationTokens: usage.cacheCreation,
           cacheCreation1hTokens: usage.cacheCreation1h,
           cacheReadTokens: usage.cacheRead,
-          // Priced now rather than at read time so historical rows keep the rate that applied.
-          // `bun run recompute-costs` re-prices everything after a price-table change.
-          costUsd: costOf(meta.model, usage),
+          costUsd,
           statusCode: meta.statusCode,
           errorType: meta.errorType ?? null,
           aborted: meta.aborted ?? false,
@@ -216,4 +218,5 @@ function recordUsage(device: AuthenticatedDevice, usage: Usage, meta: RecordMeta
     // Never let bookkeeping break a response that has already streamed.
     console.error("[gateway] failed to record usage:", err);
   }
+  return costUsd;
 }

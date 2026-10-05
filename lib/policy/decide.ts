@@ -6,6 +6,8 @@ export type Limits = {
   weeklyRequests: number | null;
   dailyTokens: number | null;
   weeklyTokens: number | null;
+  dailyCostUsd: number | null;
+  weeklyCostUsd: number | null;
   requestsPerMinute: number | null;
   maxConcurrent: number | null;
 };
@@ -39,7 +41,7 @@ export type Decision =
     };
 
 const secondsUntil = (t: number, now: number) => Math.max(1, Math.ceil((t - now) / 1000));
-const over = (used: number, limit: number | null) => limit !== null && used >= limit;
+const over = (used: number, limit: number | null): limit is number => limit !== null && used >= limit;
 
 /** Pure admission decision. Checks run in a fixed order and the first failure wins. */
 export function decide(p: PolicyInput): Decision {
@@ -73,6 +75,8 @@ export function decide(p: PolicyInput): Decision {
   if (over(c.weekRequests, l.weeklyRequests)) return quota("weekly request", w.nextWeek);
   if (over(c.dayTokens, l.dailyTokens)) return quota("daily token", w.nextDay);
   if (over(c.weekTokens, l.weeklyTokens)) return quota("weekly token", w.nextWeek);
+  if (over(c.dayCost, l.dailyCostUsd)) return quota(`daily spend ($${l.dailyCostUsd.toFixed(2)})`, w.nextDay);
+  if (over(c.weekCost, l.weeklyCostUsd)) return quota(`weekly spend ($${l.weeklyCostUsd.toFixed(2)})`, w.nextWeek);
 
   if (over(c.recent.length, l.requestsPerMinute)) {
     return {

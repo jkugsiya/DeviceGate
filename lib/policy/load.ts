@@ -10,6 +10,8 @@ const UNLIMITED: Limits = {
   weeklyRequests: null,
   dailyTokens: null,
   weeklyTokens: null,
+  dailyCostUsd: null,
+  weeklyCostUsd: null,
   requestsPerMinute: null,
   maxConcurrent: null,
 };
@@ -41,6 +43,8 @@ export function loadDevicePolicy(db: DbOrTx, deviceId: string) {
         weeklyRequests: row.weeklyRequests,
         dailyTokens: row.dailyTokens,
         weeklyTokens: row.weeklyTokens,
+        dailyCostUsd: row.dailyCostUsd,
+        weeklyCostUsd: row.weeklyCostUsd,
         requestsPerMinute: row.requestsPerMinute,
         maxConcurrent: row.maxConcurrent,
       }

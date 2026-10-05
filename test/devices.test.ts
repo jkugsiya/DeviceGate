@@ -11,7 +11,7 @@ import {
   setDeviceStatus,
   updateDevicePolicy,
 } from "../lib/devices";
-import { admit, countersFor, resetCounters } from "../lib/policy/counters";
+import { admit, countersFor, NOTHING_SPENT, resetCounters } from "../lib/policy/counters";
 import { loadDevicePolicy } from "../lib/policy/load";
 
 const actor: Actor = { adminUserId: "admin-1", ip: "10.0.0.5", userAgent: "test" };
@@ -54,7 +54,7 @@ describe("device mutations", () => {
     const token = rotateDeviceToken(db, actor, id);
     updateDevicePolicy(db, actor, id, {
       allowedModelIds: ["sonnet", "not-a-model"],
-      limits: { dailyRequests: 100, weeklyRequests: null, dailyTokens: null, weeklyTokens: null, requestsPerMinute: 10, maxConcurrent: 2 },
+      limits: { dailyRequests: 100, weeklyRequests: null, dailyTokens: null, weeklyTokens: null, dailyCostUsd: 2.5, weeklyCostUsd: null, requestsPerMinute: 10, maxConcurrent: 2 },
     });
     const rows = db.select().from(auditEvents).all();
     expect(rows.map((r) => r.action)).toEqual(["device.create", "device.rotate_token", "policy.update"]);
@@ -75,20 +75,20 @@ describe("counters", () => {
     const now = Date.now();
     const row = { requestId: "r", deviceId: id, endpoint: "messages", statusCode: 200, latencyMs: 1, ts: new Date(now - 1000) };
     db.insert(usageEvents).values([
-      { ...row, inputTokens: 10, outputTokens: 20, cacheCreationTokens: 300, cacheReadTokens: 9999 },
+      { ...row, inputTokens: 10, outputTokens: 20, cacheCreationTokens: 300, cacheReadTokens: 9999, costUsd: 0.25 },
       { ...row, statusCode: 429, errorType: "RATE_LIMITED" },
     ]).run();
 
     const c = countersFor(db, id, now);
-    expect(c).toMatchObject({ dayRequests: 1, dayTokens: 330, weekRequests: 1 });
+    expect(c).toMatchObject({ dayRequests: 1, dayTokens: 330, dayCost: 0.25, weekRequests: 1 });
 
     const release = admit(c, now);
     expect(c).toMatchObject({ dayRequests: 2, inflight: 1 });
-    release(70, now);
-    release(70, now); // idempotent
-    expect(c).toMatchObject({ dayTokens: 400, inflight: 0 });
+    release({ tokens: 70, cost: 0.5 }, now);
+    release({ tokens: 70, cost: 0.5 }, now); // idempotent
+    expect(c).toMatchObject({ dayTokens: 400, dayCost: 0.75, weekCost: 0.75, inflight: 0 });
 
-    admit(c, now)(0, now, { refund: true });
+    admit(c, now)(NOTHING_SPENT, now, { refund: true });
     expect(c.dayRequests).toBe(2);
   });
 
