@@ -24,9 +24,9 @@ function UsageStat({
   label: string;
   used: number;
   limit: number | null | undefined;
-  unit: "tokens" | "requests";
+  unit: "tokens" | "requests" | "usd";
 }) {
-  const show = unit === "tokens" ? fmtTokens : fmtNumber;
+  const show = unit === "tokens" ? fmtTokens : unit === "usd" ? fmtUsd : fmtNumber;
   const pct = limit == null || limit === 0 ? null : Math.min(100, (used / limit) * 100);
   return (
     <div className="space-y-1.5">
@@ -115,6 +115,8 @@ export default async function DevicePage({ params, searchParams }: PageProps<"/a
                 limits={[
                   { name: "dailyTokens", label: "Tokens per day", value: policy?.dailyTokens ?? null, hint: "A fresh Claude Code session uses ~40–60K tokens on its first request." },
                   { name: "weeklyTokens", label: "Tokens per week", value: policy?.weeklyTokens ?? null },
+                  { name: "dailyCostUsd", label: "Spend per day (USD)", value: policy?.dailyCostUsd ?? null, usd: true, hint: "API-equivalent cost at Anthropic's public rates, as shown in usage." },
+                  { name: "weeklyCostUsd", label: "Spend per week (USD)", value: policy?.weeklyCostUsd ?? null, usd: true },
                   { name: "dailyRequests", label: "Requests per day", value: policy?.dailyRequests ?? null },
                   { name: "weeklyRequests", label: "Requests per week", value: policy?.weeklyRequests ?? null },
                   { name: "requestsPerMinute", label: "Requests per minute", value: policy?.requestsPerMinute ?? null },
@@ -135,6 +137,8 @@ export default async function DevicePage({ params, searchParams }: PageProps<"/a
               <UsageStat label="Requests today" used={usage.dayRequests} limit={policy?.dailyRequests} unit="requests" />
               <UsageStat label="Tokens this week" used={usage.weekTokens} limit={policy?.weeklyTokens} unit="tokens" />
               <UsageStat label="Requests this week" used={usage.weekRequests} limit={policy?.weeklyRequests} unit="requests" />
+              <UsageStat label="Spend today" used={usage.dayCost} limit={policy?.dailyCostUsd} unit="usd" />
+              <UsageStat label="Spend this week" used={usage.weekCost} limit={policy?.weeklyCostUsd} unit="usd" />
             </CardContent>
           </Card>
           <Card>

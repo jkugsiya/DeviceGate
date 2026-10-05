@@ -74,6 +74,7 @@ device_models        device_id, model_id                      -- allow-list
 device_policies      device_id, default_model_id,
                      daily_requests, weekly_requests,
                      daily_tokens, weekly_tokens,
+                     daily_cost_usd, weekly_cost_usd,
                      requests_per_minute,
                      max_concurrent                           -- NULL = unlimited
 usage_events         id, request_id, device_id, ts, model, endpoint,
@@ -122,7 +123,7 @@ audit_events         id, ts, admin_user_id, action, target_type, target_id,
 [1] Auth         Bearer → sha256 → token lookup → device enabled, token not revoked   401/403
 [2] Parse        read body; Zod-pick { model, stream }                               400
 [3] Model gate   resolve model → registry → enabled && in device allow-list          403
-[4] Quota        today/week requests & tokens (local-time windows) vs policy         429
+[4] Quota        today/week requests, tokens & spend (local-time windows) vs policy  429
 [5] Rate         sliding-window requests/minute                                      429 + Retry-After
 [6] Concurrency  per-device in-flight count                                          429 + Retry-After
 [7] Forward      strip Authorization/x-api-key, add the TeamClaude key,
@@ -161,6 +162,9 @@ Other routes:
   the UI but don't count toward quota. Otherwise long Claude Code sessions would burn quota almost
   entirely on cache reads.
 - Quota is checked before the request, against usage so far, so one request can overshoot.
+- **Spend limits** use the same `cost_usd` the usage pages show (API-equivalent, from
+  `lib/pricing.ts`). A model with no published price counts as $0 toward them, so cap it with a
+  token limit or leave it off the device's allow-list.
 - Local token counts ≠ subscription consumption. The admin shows upstream 5-hour and weekly
   utilization (read from response headers) **separately** from local per-device usage.
 

@@ -13,8 +13,8 @@ First public release.
 - Streaming proxy for Claude Code in front of TeamClaude, with per-device tokens and the
   subscription beta headers restored.
 - One-time setup codes and setup scripts for macOS, Linux and Windows.
-- Per-device model allow-lists, daily and weekly request and token quotas, requests-per-minute and
-  concurrency limits.
+- Per-device model allow-lists, daily and weekly request, token and spend (USD) quotas,
+  requests-per-minute and concurrency limits.
 - Usage explorer with per-device, per-model and per-day breakdowns, and API-equivalent cost tracking.
 - Subscription 5-hour and weekly capacity read from upstream response headers.
 - Admin UI with an audit log of every change and sign-in attempt.

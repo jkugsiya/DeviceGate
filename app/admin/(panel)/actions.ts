@@ -36,6 +36,19 @@ const limit = z
     }
     return n;
   });
+// Dollar amounts, rounded to cents. Empty input = unlimited.
+const usdLimit = z
+  .string()
+  .trim()
+  .transform((s, ctx) => {
+    if (s === "") return null;
+    const n = Number(s.replace(/^\$/, "").replaceAll(",", ""));
+    if (!Number.isFinite(n) || n < 0 || n > 1e9) {
+      ctx.addIssue({ code: "custom", message: "Spend limits must be dollar amounts ≥ 0 (leave empty for unlimited)" });
+      return z.NEVER;
+    }
+    return Math.round(n * 100) / 100;
+  });
 
 const str = (f: FormData, key: string) => String(f.get(key) ?? "");
 
@@ -93,6 +106,8 @@ export async function updatePolicyAction(deviceId: string, _prev: FormResult, fo
         weeklyRequests: limit,
         dailyTokens: limit,
         weeklyTokens: limit,
+        dailyCostUsd: usdLimit,
+        weeklyCostUsd: usdLimit,
         requestsPerMinute: limit,
         maxConcurrent: limit,
       }),
@@ -104,6 +119,8 @@ export async function updatePolicyAction(deviceId: string, _prev: FormResult, fo
         weeklyRequests: str(form, "weeklyRequests"),
         dailyTokens: str(form, "dailyTokens"),
         weeklyTokens: str(form, "weeklyTokens"),
+        dailyCostUsd: str(form, "dailyCostUsd"),
+        weeklyCostUsd: str(form, "weeklyCostUsd"),
         requestsPerMinute: str(form, "requestsPerMinute"),
         maxConcurrent: str(form, "maxConcurrent"),
       },

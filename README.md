@@ -36,8 +36,8 @@ one used it. DeviceGate gives you:
   the PC (macOS, Linux or Windows). After that, plain `claude` works.
 - **Per-device model access.** Allow Opus on your workstation and only Haiku on the automation box.
   Models match by family prefix, so new model versions are covered without code changes.
-- **Per-device limits.** Daily and weekly request and token quotas, requests per minute, and
-  concurrent requests. When a limit is hit, Claude Code shows a readable error with the reset time.
+- **Per-device limits.** Daily and weekly request, token and spend (USD, at API rates) quotas,
+  requests per minute, and concurrent requests. When a limit is hit, Claude Code shows a readable error with the reset time.
 - **Usage and cost tracking.** Input, output and cache tokens for every request, plus what they
   would have cost at API rates. Break it down by device, model and day, filter it, and bookmark or
   share the view as a URL.
