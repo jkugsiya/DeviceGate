@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { cn } from "cn";
-import { fmtAgo, fmtIn, fmtTokens, fmtUsd } from "@/lib/format";
+import { fmtAgo, fmtIn, fmtNumber, fmtTokens, fmtUsd } from "@/lib/format";
+import { clientIp } from "@/lib/proxy/forward";
 import {
+  devicesAtIp,
   type Leaderboard,
   type LeaderRow,
   publicSnapshot,
   type Totals,
+  type ThisDevice,
   type Trend,
   TREND_RANGES,
   type TrendRange,
@@ -88,6 +92,78 @@ function TotalsPanel({ label, totals, note }: { label: string; totals: Totals; n
       </dl>
       <p className="text-sm text-muted-foreground">{note}</p>
     </div>
+  );
+}
+
+/** One quota window's usage against its limit; the bar only appears once there is a limit. */
+function Meter({ label, used, limit, format }: { label: string; used: number; limit: number | null; format: (n: number) => string }) {
+  const pct = limit === null || limit === 0 ? null : Math.min(100, (used / limit) * 100);
+  const high = pct !== null && pct >= 90;
+  return (
+    <div className="space-y-1.5">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="font-mono text-sm tabular-nums">
+        <span className={cn(high && "text-destructive")}>{format(used)}</span>
+        {limit === null ? (
+          <span className="font-sans text-muted-foreground"> · no limit</span>
+        ) : (
+          <span className="text-muted-foreground"> / {format(limit)}</span>
+        )}
+      </dd>
+      {pct !== null && (
+        <dd
+          className="h-1 overflow-hidden rounded-full bg-muted"
+          role="meter"
+          aria-valuenow={Math.round(pct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${label}: ${Math.round(pct)}% of limit`}
+        >
+          <div className={cn("h-full rounded-full", high ? "bg-destructive" : "bg-chart-1")} style={{ width: `${Math.max(pct, 1)}%` }} />
+        </dd>
+      )}
+    </div>
+  );
+}
+
+/** The visiting machine's own usage, limits and models, matched by the address it browses from. */
+function ThisDevicePanel({ device: d }: { device: ThisDevice }) {
+  const l = d.limits;
+  return (
+    <section aria-label={`This PC: ${d.name}`} className="space-y-6 rounded-2xl bg-card p-8 ring-1 ring-foreground/10">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <div className="space-y-1">
+          <p className="text-xs font-medium tracking-widest text-muted-foreground uppercase">This PC</p>
+          <h2 className="font-heading text-2xl font-semibold tracking-tight">{d.name}</h2>
+        </div>
+        <p className="text-sm text-muted-foreground">Last request {fmtAgo(d.lastSeenAt)}</p>
+      </div>
+      <div className="grid gap-8 sm:grid-cols-2 sm:gap-12">
+        <div className="space-y-3">
+          <p className="text-sm font-medium">
+            Today <span className="font-normal text-muted-foreground">· resets {fmtIn(d.nextDay)}</span>
+          </p>
+          <dl className="space-y-3">
+            <Meter label="Tokens" used={d.today.tokens} limit={l.dailyTokens} format={fmtTokens} />
+            <Meter label="API-equivalent spend" used={d.today.cost} limit={l.dailyCostUsd} format={fmtUsd} />
+            <Meter label="Requests" used={d.today.requests} limit={l.dailyRequests} format={fmtNumber} />
+          </dl>
+        </div>
+        <div className="space-y-3">
+          <p className="text-sm font-medium">
+            This week <span className="font-normal text-muted-foreground">· resets {fmtIn(d.nextWeek)}</span>
+          </p>
+          <dl className="space-y-3">
+            <Meter label="Tokens" used={d.week.tokens} limit={l.weeklyTokens} format={fmtTokens} />
+            <Meter label="API-equivalent spend" used={d.week.cost} limit={l.weeklyCostUsd} format={fmtUsd} />
+            <Meter label="Requests" used={d.week.requests} limit={l.weeklyRequests} format={fmtNumber} />
+          </dl>
+        </div>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {d.models.length > 0 ? `Can use ${d.models.join(", ")}` : "No models are allowed for this PC yet"}
+      </p>
+    </section>
   );
 }
 
@@ -322,9 +398,15 @@ function Board({
 }
 
 /** Everything the page shows, read against one clock so the figures agree with each other. */
-function load(range: TrendRange) {
+function load(range: TrendRange, ip: string | null) {
   const now = Date.now();
-  return { now, ...publicSnapshot(now), totals: usageTotals(now), trend: usageTrend(range, now) };
+  return {
+    now,
+    ...publicSnapshot(now),
+    mine: devicesAtIp(ip, now),
+    totals: usageTotals(now),
+    trend: usageTrend(range, now),
+  };
 }
 
 export default async function HomePage({ searchParams }: PageProps<"/">) {
@@ -332,7 +414,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   const rangeParam = param(params.range);
   const range = (TREND_RANGES as readonly string[]).includes(rangeParam) ? (rangeParam as TrendRange) : DEFAULT_RANGE;
   const metric: TrendMetric = param(params.metric) === "cost" ? "cost" : DEFAULT_METRIC;
-  const { now, quota, byTokens, byCost, totals, trend } = load(range);
+  // Same address source as the proxy, which is what recorded each device's last IP.
+  const { now, quota, mine, byTokens, byCost, totals, trend } = load(range, clientIp(await headers()));
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-12 px-6 py-16">
@@ -354,6 +437,11 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         <div className="hidden w-px bg-border sm:block" aria-hidden />
         <Capacity label="This week" remaining={quota.weeklyRemaining} reset={quota.weeklyReset} />
       </section>
+
+      {mine.map((d, i) => (
+        // Names aren't unique, and the page deliberately has no device ids.
+        <ThisDevicePanel key={i} device={d} />
+      ))}
 
       <section
         aria-label="Usage totals"

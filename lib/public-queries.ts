@@ -1,6 +1,7 @@
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { db } from "./db/client";
 import { devices, upstreamQuota, usageEvents } from "./db/schema";
+import { loadDevicePolicy } from "./policy/load";
 import { windowsAt } from "./policy/windows";
 import { addDays, dayKey, dayStartAt, dayStartOf, HOUR_MS, hourStartAt } from "./timezone";
 import { dailySeries, hourlySeries } from "./usage-queries";
@@ -12,6 +13,9 @@ import { dailySeries, hourlySeries } from "./usage-queries";
  * what that would have cost. No ids, IP addresses, notes or request logs — so a future change to
  * the page cannot accidentally publish something private. Anything more belongs behind /admin.
  * The gateway-wide totals and trend below are aggregates only, with no per-device split at all.
+ *
+ * The one exception is `devicesAtIp`, which shows a device its own usage and limits, and only to a
+ * browser on the address that device last connected from.
  */
 
 export type LeaderRow = { name: string; tokens: number; cost: number };
@@ -179,4 +183,101 @@ export function usageTrend(range: TrendRange, now = Date.now()): Trend {
     total.cost += p.cost;
   }
   return { bucket, points, total };
+}
+
+/**
+ * One form per address, so a browser and Claude Code on the same machine compare equal: drops the
+ * IPv4-mapped IPv6 prefix and folds the IPv6 loopback into IPv4's.
+ */
+export function normalizeIp(ip: string): string {
+  const v = ip.trim().toLowerCase().replace(/^::ffff:/, "");
+  return v === "::1" ? "127.0.0.1" : v;
+}
+
+export type WindowUsage = { requests: number; tokens: number; cost: number };
+
+export type ThisDevice = {
+  name: string;
+  lastSeenAt: Date | null;
+  today: WindowUsage;
+  week: WindowUsage;
+  /** The quota limits only; NULL is unlimited. Rate and concurrency limits aren't shown. */
+  limits: {
+    dailyRequests: number | null;
+    weeklyRequests: number | null;
+    dailyTokens: number | null;
+    weeklyTokens: number | null;
+    dailyCostUsd: number | null;
+    weeklyCostUsd: number | null;
+  };
+  /** Display names of the models this device may use right now. */
+  models: string[];
+  nextDay: number;
+  nextWeek: number;
+};
+
+/**
+ * The enabled devices whose last request came from `ip`, most recently seen first. Usually one;
+ * several when one machine runs more than one device (WSL, a second user account).
+ *
+ * The IP is only a hint, not a credential: anyone who can reach the page could claim another
+ * address. That is acceptable for usage figures on a LAN, which is why nothing here can change
+ * anything or reveals more than the device's own numbers.
+ */
+export function devicesAtIp(ip: string | null, now = Date.now()): ThisDevice[] {
+  if (!ip) return [];
+  const want = normalizeIp(ip);
+  const matched = db()
+    .select({ id: devices.id, name: devices.name, lastSeenAt: devices.lastSeenAt, lastIp: devices.lastIp })
+    .from(devices)
+    .where(and(isNull(devices.deletedAt), eq(devices.status, "enabled")))
+    .all()
+    .filter((d) => d.lastIp !== null && normalizeIp(d.lastIp) === want)
+    .sort((a, b) => (b.lastSeenAt?.getTime() ?? 0) - (a.lastSeenAt?.getTime() ?? 0));
+  if (matched.length === 0) return [];
+
+  const w = windowsAt(now);
+  // Same rules as enforcement (lib/policy/counters.ts): refused requests don't count.
+  const today = sql`${usageEvents.ts} >= ${w.dayStart}`;
+  const counted = and(
+    eq(usageEvents.endpoint, "messages"),
+    isNull(usageEvents.errorType),
+    gte(usageEvents.ts, new Date(w.weekStart)),
+  );
+
+  return matched.map((d) => {
+    const u = db()
+      .select({
+        dayRequests: sql<number>`coalesce(sum(case when ${today} then 1 else 0 end), 0)`,
+        dayTokens: sql<number>`coalesce(sum(case when ${today} then ${quotaTokens} else 0 end), 0)`,
+        dayCost: sql<number>`coalesce(sum(case when ${today} then ${usageEvents.costUsd} else 0 end), 0)`,
+        weekRequests: sql<number>`count(*)`,
+        weekTokens: sql<number>`coalesce(sum(${quotaTokens}), 0)`,
+        weekCost: sql<number>`coalesce(sum(${usageEvents.costUsd}), 0)`,
+      })
+      .from(usageEvents)
+      .where(and(eq(usageEvents.deviceId, d.id), counted))
+      .get()!;
+    const { registry, allowedModelIds, limits: l } = loadDevicePolicy(db(), d.id);
+    return {
+      name: d.name,
+      lastSeenAt: d.lastSeenAt,
+      today: { requests: u.dayRequests, tokens: u.dayTokens, cost: u.dayCost },
+      week: { requests: u.weekRequests, tokens: u.weekTokens, cost: u.weekCost },
+      limits: {
+        dailyRequests: l.dailyRequests,
+        weeklyRequests: l.weeklyRequests,
+        dailyTokens: l.dailyTokens,
+        weeklyTokens: l.weeklyTokens,
+        dailyCostUsd: l.dailyCostUsd,
+        weeklyCostUsd: l.weeklyCostUsd,
+      },
+      models: registry
+        .filter((m) => m.enabled && allowedModelIds.has(m.id))
+        .map((m) => m.displayName)
+        .sort(),
+      nextDay: w.nextDay,
+      nextWeek: w.nextWeek,
+    };
+  });
 }

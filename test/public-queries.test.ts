@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Actor } from "../lib/audit";
 import { type DB, migrateDb, openDb } from "../lib/db/client";
-import { upstreamQuota, usageEvents } from "../lib/db/schema";
+import { devicePolicies, devices, upstreamQuota, usageEvents } from "../lib/db/schema";
+import { eq } from "drizzle-orm";
 import { createDevice, setDeviceStatus } from "../lib/devices";
-import { publicSnapshot, usageTotals, usageTrend } from "../lib/public-queries";
+import { devicesAtIp, normalizeIp, publicSnapshot, usageTotals, usageTrend } from "../lib/public-queries";
 import { dayStartAt } from "../lib/timezone";
 
 const actor: Actor = { adminUserId: "admin-1", ip: "10.0.0.5", userAgent: "test" };
@@ -178,5 +179,69 @@ describe("usage totals and trend", () => {
 
     // "all" starts at the first recorded day rather than an arbitrary cutoff.
     expect(usageTrend("all", NOW).points).toHaveLength(4);
+  });
+});
+
+describe("devicesAtIp", () => {
+  const NOW = Date.parse("2026-09-22T12:00:00Z"); // a Tuesday
+
+  function seenFrom(id: string, ip: string, at = NOW) {
+    db.update(devices).set({ lastIp: ip, lastSeenAt: new Date(at) }).where(eq(devices.id, id)).run();
+  }
+
+  function record(deviceId: string, at: number, tokens: number, errorType: string | null = null) {
+    db.insert(usageEvents)
+      .values({
+        requestId: crypto.randomUUID(),
+        deviceId,
+        ts: new Date(at),
+        endpoint: "messages",
+        model: "claude-sonnet-5",
+        inputTokens: tokens,
+        costUsd: tokens / 1000,
+        statusCode: errorType ? 429 : 200,
+        errorType,
+        latencyMs: 10,
+      })
+      .run();
+  }
+
+  it("treats the forms one machine's address can take as equal", () => {
+    expect(normalizeIp("::ffff:192.168.1.5")).toBe("192.168.1.5");
+    expect(normalizeIp("::1")).toBe("127.0.0.1");
+  });
+
+  it("returns only enabled devices last seen from the address, newest first", () => {
+    const desk = createDevice(db, actor, { name: "desk" }).id;
+    const wsl = createDevice(db, actor, { name: "wsl" }).id;
+    const other = createDevice(db, actor, { name: "other" }).id;
+    const off = createDevice(db, actor, { name: "off" }).id;
+    seenFrom(desk, "192.168.1.5", NOW - 60_000);
+    seenFrom(wsl, "::ffff:192.168.1.5", NOW);
+    seenFrom(other, "192.168.1.6");
+    seenFrom(off, "192.168.1.5");
+    setDeviceStatus(db, actor, off, "disabled");
+
+    expect(names(devicesAtIp("192.168.1.5", NOW))).toEqual(["wsl", "desk"]);
+    expect(devicesAtIp("10.0.0.1", NOW)).toEqual([]);
+    expect(devicesAtIp(null, NOW)).toEqual([]);
+  });
+
+  it("splits today from the week and leaves out refused requests, like enforcement", () => {
+    const id = createDevice(db, actor, { name: "desk" }).id;
+    seenFrom(id, "192.168.1.5");
+    db.update(devicePolicies).set({ dailyTokens: 500, weeklyCostUsd: 5 }).where(eq(devicePolicies.deviceId, id)).run();
+    record(id, dayStartAt(NOW) - 1, 200); // yesterday, same week
+    record(id, NOW, 30);
+    record(id, NOW, 0, "QUOTA_EXCEEDED");
+    record(id, NOW - 8 * 86_400_000, 999); // last week
+
+    const [d] = devicesAtIp("192.168.1.5", NOW);
+    expect(d.today).toEqual({ requests: 1, tokens: 30, cost: 0.03 });
+    expect(d.week).toEqual({ requests: 2, tokens: 230, cost: 0.23 });
+    expect(d.limits.dailyTokens).toBe(500);
+    expect(d.limits.weeklyCostUsd).toBe(5);
+    expect(d.limits.dailyRequests).toBeNull();
+    expect(d.models.length).toBeGreaterThan(0);
   });
 });

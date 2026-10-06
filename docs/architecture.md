@@ -197,7 +197,10 @@ diff. Secrets are never included: no tokens, no codes, no OAuth material.
 - The OAuth credential never leaves the gateway machine. PCs hold only their own revocable token.
 - No request or response bodies are logged, and `Authorization` is never logged.
 - The public page at `/` selects only device names, token counts and costs
-  (`lib/public-queries.ts`), so ids, IPs, notes and request logs can't leak onto it.
+  (`lib/public-queries.ts`), so ids, IPs, notes and request logs can't leak onto it. The one
+  exception is the "This PC" card: a browser whose address matches a device's last IP sees that
+  device's own usage, quota limits and allowed models. IP matching isn't authentication
+  (`X-Forwarded-For` can be forged on the LAN), so the card is read-only and shows nothing else.
 
 ## Protocol notes
 

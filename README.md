@@ -284,6 +284,12 @@ hours (by hour) or 7, 30, 90 days or all time (by day), and this week's devices 
 by cost. Only device **names** and totals appear there (`lib/public-queries.ts` selects nothing else). If the gateway can be reached beyond
 your LAN, restrict `/` at your reverse proxy.
 
+Opened on a connected PC, the page also shows a **This PC** card with that device's usage today
+and this week against its limits, and the models it may use. The match is by IP address: the
+browser's address against the one the device last sent a request from, so it appears after the
+PC's first `claude` request. It's a convenience, not a login, so anyone on your LAN who forges the
+address could see the same figures.
+
 ## Moving to a new gateway machine
 
 - **To keep devices, usage, admins and the audit log:** stop the old gateway, then copy
