@@ -11,7 +11,7 @@ export type AccountState = "available" | "throttled" | "exhausted" | "disabled" 
 
 export type PoolAccount = {
   name: string;
-  /** "Max 20x", "Max 5x", "Pro" or "API key"; null when TeamClaude doesn't know the tier. */
+  /** "Max 20x", "Max 5x", "Pro", "Team Standard", "Team Premium" or "API key"; null when unknown. */
   plan: string | null;
   state: AccountState;
   fiveHour: QuotaWindow | null;
@@ -45,12 +45,13 @@ const quotaPayload = z.object({
       type: z.string().nullish(),
       disabled: z.boolean().nullish(),
       status: z.string().nullish(),
-      tier: z.object({ weight: z.number().nullish() }).nullish(),
+      tier: z.object({ seatTier: z.string().nullish(), weight: z.number().nullish() }).nullish(),
       buckets: z.object({ fiveHour: bucket, weeklyShared: bucket, weeklyFable: bucket }),
     }),
   ),
 });
 type Bucket = z.infer<typeof bucket>;
+type RawAccount = z.infer<typeof quotaPayload>["accounts"][number];
 
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
@@ -60,8 +61,16 @@ function windowOf(b: Bucket): QuotaWindow | null {
   return { used: clamp(b.utilization), resetAt: b.resetAt == null ? null : new Date(b.resetAt) };
 }
 
-function planOf(type: string | null | undefined, weight: number | null | undefined): string | null {
+/**
+ * A Team seat is labelled by its seat tier rather than its weight, which only says how it compares
+ * to Pro: a standard seat weighs the same as Pro but isn't one.
+ */
+function planOf(type: string | null | undefined, tier: RawAccount["tier"]): string | null {
   if (type === "apikey") return "API key";
+  const seat = tier?.seatTier;
+  if (seat === "team_standard") return "Team Standard";
+  if (seat?.startsWith("team_")) return "Team Premium";
+  const weight = tier?.weight;
   return weight === 20 ? "Max 20x" : weight === 5 ? "Max 5x" : weight === 1 ? "Pro" : null;
 }
 
@@ -103,7 +112,7 @@ export function parsePool(json: unknown, now = new Date()): PoolQuota {
           : a.status === "throttled"
             ? "throttled"
             : "available";
-    const account: PoolAccount = { name: a.name, plan: planOf(a.type, a.tier?.weight), state, fiveHour, weekly, fable };
+    const account: PoolAccount = { name: a.name, plan: planOf(a.type, a.tier), state, fiveHour, weekly, fable };
     return { account, weight: a.tier?.weight ?? null };
   });
 

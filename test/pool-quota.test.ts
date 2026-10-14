@@ -39,15 +39,17 @@ describe("parsePool", () => {
       accounts: [
         account("big", {}, { fiveHour: b(0.5, T0 + 3 * HOUR) }),
         account("small", { tier: { weight: 5 } }, { fiveHour: b(1, T0 + HOUR) }),
+        account("seat", { tier: { rateLimitTier: "default_raven", seatTier: "team_standard", weight: 1 } }),
       ],
       aggregate: {},
     });
-    // (20 × 0.5 + 5 × 1) / 25
-    expect(pool.fiveHour?.used).toBeCloseTo(0.6, 10);
+    // (20 × 0.5 + 5 × 1 + 1 × 0) / 26
+    expect(pool.fiveHour?.used).toBeCloseTo(15 / 26, 10);
     expect(pool.fiveHour?.resetAt).toEqual(new Date(T0 + HOUR));
     expect(pool.accounts.map((a) => [a.name, a.plan, a.state])).toEqual([
       ["big", "Max 20x", "available"],
       ["small", "Max 5x", "exhausted"],
+      ["seat", "Team Standard", "available"],
     ]);
   });
 
