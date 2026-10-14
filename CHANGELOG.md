@@ -15,6 +15,8 @@ All notable changes to this project are documented here. The format follows
 - Per-account capacity on the status page: plan, status, and 5-hour, weekly and Fable weekly
   remaining for each account, so a PC hitting 429s can see whether the whole pool is out.
   Accounts are numbered ("Account 1", "Account 2"…), never named.
+- Pause and Resume buttons for each account on the admin overview, through TeamClaude's
+  `POST /teamclaude/disable`. Each change is recorded in the audit log.
 - README section on running several of your own Claude accounts through TeamClaude, and on
   `teamclaude probe` for keeping idle accounts' figures fresh.
 

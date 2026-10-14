@@ -199,6 +199,13 @@ proxy:
   `anthropic-ratelimit-unified-*` headers on the last proxied response, so with several accounts it
   only describes whichever account served that request.
 
+**Pausing an account.** The admin's Pause and Resume buttons call TeamClaude's
+`POST /teamclaude/disable` with `{ account, disabled }` (TeamClaude 1.1.25+). TeamClaude writes the
+change to its config file and reloads, so DeviceGate stores nothing about it beyond an
+`account.disable` / `account.enable` audit row, written only once TeamClaude has accepted the
+change. The endpoint needs TeamClaude's `proxy.apiKey`; a `clientKeys` key is refused. The cached
+reading is dropped on success, so the overview shows the new state straight away.
+
 TeamClaude learns an account's quota from traffic, or from `teamclaude probe`, which reads
 Anthropic's usage endpoint without spending quota. Without the probe, an idle account's figures go
 stale.
@@ -211,7 +218,7 @@ components that query Drizzle directly.
 
 Audit actions: `device.create`, `device.update`, `device.disable`, `device.enable`,
 `device.rotate_token`, `device.delete`, `policy.update`, `model.update`, `enrollment.create`,
-`enrollment.used`, `enrollment.failed`, `admin.create`, `admin.password_reset`, `admin.login` and
+`enrollment.used`, `enrollment.failed`, `account.disable`, `account.enable`, `admin.create`, `admin.password_reset`, `admin.login` and
 `admin.login_failed`. Each stores a before/after JSON
 diff. Secrets are never included: no tokens, no codes, no OAuth material.
 

@@ -159,6 +159,37 @@ async function readPool(): Promise<PoolQuota> {
   }
 }
 
+/**
+ * Takes a TeamClaude account out of rotation, or puts it back, through its control endpoint
+ * (`POST /teamclaude/disable`, TeamClaude 1.1.25+). TeamClaude writes its config file and reloads,
+ * so the change outlives a restart. Throws with a message fit for the admin when it refuses.
+ */
+export async function setAccountPaused(name: string, paused: boolean): Promise<void> {
+  const { UPSTREAM_URL, UPSTREAM_API_KEY } = config();
+  let res: Response;
+  try {
+    res = await fetch(`${UPSTREAM_URL}/teamclaude/disable`, {
+      method: "POST",
+      headers: { "x-api-key": UPSTREAM_API_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ account: name, disabled: paused }),
+      signal: AbortSignal.timeout(5000),
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error("TeamClaude isn't reachable.");
+  }
+  if (res.ok) {
+    // The next page view should show the change, not a 30-second-old reading.
+    delete cache.__poolQuota;
+    return;
+  }
+  if (res.status === 404) throw new Error("This TeamClaude can't pause accounts. Update it to 1.1.25 or newer.");
+  if (res.status === 401) throw new Error("TeamClaude rejected UPSTREAM_API_KEY.");
+  // TeamClaude's refusals (unknown account, a client key instead of proxy.apiKey) explain themselves.
+  const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+  throw new Error(typeof body?.error === "string" ? `TeamClaude: ${body.error}` : `TeamClaude answered ${res.status}.`);
+}
+
 const CACHE_MS = 30_000;
 // Shared by the admin and the public page, so page views never fan out into TeamClaude calls.
 const cache = globalThis as unknown as { __poolQuota?: { at: number; value: Promise<PoolQuota> } };
