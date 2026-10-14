@@ -3,11 +3,13 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { cn } from "cn";
 import { fmtAgo, fmtIn, fmtNumber, fmtTokens, fmtUsd } from "@/lib/format";
+import { poolQuota } from "@/lib/pool-quota";
 import { clientIp } from "@/lib/proxy/forward";
 import {
   devicesAtIp,
   type Leaderboard,
   type LeaderRow,
+  publicCapacity,
   publicSnapshot,
   type Totals,
   type ThisDevice,
@@ -415,7 +417,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   const range = (TREND_RANGES as readonly string[]).includes(rangeParam) ? (rangeParam as TrendRange) : DEFAULT_RANGE;
   const metric: TrendMetric = param(params.metric) === "cost" ? "cost" : DEFAULT_METRIC;
   // Same address source as the proxy, which is what recorded each device's last IP.
-  const { now, quota, mine, byTokens, byCost, totals, trend } = load(range, clientIp(await headers()));
+  const { now, mine, byTokens, byCost, totals, trend } = load(range, clientIp(await headers()));
+  const quota = publicCapacity(await poolQuota(now));
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-12 px-6 py-16">
@@ -428,7 +431,9 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         </div>
         <p className="text-sm text-muted-foreground">
           Subscription capacity and usage
-          {quota.updatedAt && ` · updated ${fmtAgo(quota.updatedAt)}`}
+          {quota.accounts
+            ? quota.accounts.total > 1 && ` · ${quota.accounts.withHeadroom} of ${quota.accounts.total} accounts with capacity left`
+            : quota.updatedAt && ` · updated ${fmtAgo(quota.updatedAt)}`}
         </p>
       </header>
 
