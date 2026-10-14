@@ -225,8 +225,9 @@ diff. Secrets are never included: no tokens, no codes, no OAuth material.
 - No request or response bodies are logged, and `Authorization` is never logged.
 - The public page at `/` selects only device names, token counts and costs
   (`lib/public-queries.ts`), so ids, IPs, notes and request logs can't leak onto it. Subscription
-  capacity goes through `publicCapacity`, which keeps the pool totals and account counts and drops
-  account names (usually email addresses). The one
+  capacity goes through `publicCapacity`, which keeps the pool totals and each account's plan,
+  status and windows, and replaces account names (usually email addresses) with "Account 1",
+  "Account 2"…. The one
   exception is the "This PC" card: a browser whose address matches a device's last IP sees that
   device's own usage, quota limits and allowed models. IP matching isn't authentication
   (`X-Forwarded-For` can be forged on the LAN), so the card is read-only and shows nothing else.

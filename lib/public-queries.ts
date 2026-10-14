@@ -1,7 +1,7 @@
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { db } from "./db/client";
 import { devices, usageEvents } from "./db/schema";
-import type { PoolQuota } from "./pool-quota";
+import type { PoolAccount, PoolQuota } from "./pool-quota";
 import { loadDevicePolicy } from "./policy/load";
 import { windowsAt } from "./policy/windows";
 import { addDays, dayKey, dayStartAt, dayStartOf, HOUR_MS, hourStartAt } from "./timezone";
@@ -17,7 +17,8 @@ import { dailySeries, hourlySeries } from "./usage-queries";
  *
  * The one exception is `devicesAtIp`, which shows a device its own usage and limits, and only to a
  * browser on the address that device last connected from. Subscription capacity goes through
- * `publicCapacity`, which drops account names: they are usually email addresses.
+ * `publicCapacity`, which replaces account names with "Account 1", "Account 2"…: they are usually
+ * email addresses.
  */
 
 export type LeaderRow = { name: string; tokens: number; cost: number };
@@ -88,6 +89,9 @@ export function publicSnapshot(now = Date.now()): PublicSnapshot {
   };
 }
 
+/** One TeamClaude account as the public page sees it: everything but the name. */
+export type PublicAccount = Omit<PoolAccount, "name"> & { label: string };
+
 export type PublicCapacity = {
   /** Fraction of the window still available, or null when nothing has been recorded yet. */
   fiveHourRemaining: number | null;
@@ -95,11 +99,11 @@ export type PublicCapacity = {
   weeklyRemaining: number | null;
   weeklyReset: Date | null;
   updatedAt: Date | null;
-  /** Null unless TeamClaude reported its accounts; counts only, never names. */
-  accounts: { total: number; withHeadroom: number } | null;
+  /** Null unless TeamClaude reported its accounts. */
+  accounts: { total: number; withHeadroom: number; list: PublicAccount[] } | null;
 };
 
-/** The pool's remaining capacity, stripped of anything that identifies an account. */
+/** The pool's remaining capacity, with account names swapped for numbered labels. */
 export function publicCapacity(pool: PoolQuota): PublicCapacity {
   const enabled = pool.accounts.filter((a) => a.state !== "disabled");
   return {
@@ -113,6 +117,16 @@ export function publicCapacity(pool: PoolQuota): PublicCapacity {
         ? {
             total: enabled.length,
             withHeadroom: enabled.filter((a) => a.state === "available" || a.state === "throttled").length,
+            // Built field by field rather than by dropping `name`, so a field TeamClaude adds later
+            // can't reach the page without someone choosing to publish it.
+            list: pool.accounts.map((a, i) => ({
+              label: `Account ${i + 1}`,
+              plan: a.plan,
+              state: a.state,
+              fiveHour: a.fiveHour,
+              weekly: a.weekly,
+              fable: a.fable,
+            })),
           }
         : null,
   };

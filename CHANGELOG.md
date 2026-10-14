@@ -11,8 +11,10 @@ All notable changes to this project are documented here. The format follows
 - Subscription capacity for every Claude account TeamClaude holds, read from its
   `GET /teamclaude/quota` endpoint: plan, status, and 5-hour, weekly and Fable weekly use per
   account on the admin overview.
-- Pool totals weighted by plan size on the admin overview and the status page. The status page
-  shows how many accounts have capacity left, never their names.
+- Pool totals weighted by plan size on the admin overview and the status page.
+- Per-account capacity on the status page: plan, status, and 5-hour, weekly and Fable weekly
+  remaining for each account, so a PC hitting 429s can see whether the whole pool is out.
+  Accounts are numbered ("Account 1", "Account 2"…), never named.
 - README section on running several of your own Claude accounts through TeamClaude, and on
   `teamclaude probe` for keeping idle accounts' figures fresh.
 

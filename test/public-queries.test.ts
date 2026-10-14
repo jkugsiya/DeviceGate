@@ -135,9 +135,14 @@ describe("publicCapacity", () => {
     expect(publicCapacity(pool({ source: "none" })).fiveHourRemaining).toBeNull();
   });
 
-  it("counts accounts without naming them, leaving paused ones out", () => {
+  it("lists every account under a numbered label, leaving paused ones out of the counts", () => {
     const c = publicCapacity(pool({ accounts: [account("available"), account("exhausted"), account("disabled")] }));
-    expect(c.accounts).toEqual({ total: 2, withHeadroom: 1 });
+    expect(c.accounts).toMatchObject({ total: 2, withHeadroom: 1 });
+    expect(c.accounts?.list.map((a) => [a.label, a.state])).toEqual([
+      ["Account 1", "available"],
+      ["Account 2", "exhausted"],
+      ["Account 3", "disabled"],
+    ]);
     expect(JSON.stringify(c)).not.toContain("example.com");
   });
 
