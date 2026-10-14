@@ -1,6 +1,7 @@
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { db } from "./db/client";
-import { devices, upstreamQuota, usageEvents } from "./db/schema";
+import { devices, usageEvents } from "./db/schema";
+import type { PoolQuota } from "./pool-quota";
 import { loadDevicePolicy } from "./policy/load";
 import { windowsAt } from "./policy/windows";
 import { addDays, dayKey, dayStartAt, dayStartOf, HOUR_MS, hourStartAt } from "./timezone";
@@ -15,7 +16,8 @@ import { dailySeries, hourlySeries } from "./usage-queries";
  * The gateway-wide totals and trend below are aggregates only, with no per-device split at all.
  *
  * The one exception is `devicesAtIp`, which shows a device its own usage and limits, and only to a
- * browser on the address that device last connected from.
+ * browser on the address that device last connected from. Subscription capacity goes through
+ * `publicCapacity`, which drops account names: they are usually email addresses.
  */
 
 export type LeaderRow = { name: string; tokens: number; cost: number };
@@ -32,13 +34,6 @@ export type Leaderboard = {
 };
 
 export type PublicSnapshot = {
-  quota: {
-    fiveHourRemaining: number | null;
-    fiveHourReset: Date | null;
-    weeklyRemaining: number | null;
-    weeklyReset: Date | null;
-    updatedAt: Date | null;
-  };
   byTokens: Leaderboard;
   byCost: Leaderboard;
   deviceCount: number;
@@ -46,11 +41,6 @@ export type PublicSnapshot = {
 };
 
 const quotaTokens = sql`(${usageEvents.inputTokens} + ${usageEvents.cacheCreationTokens} + ${usageEvents.outputTokens})`;
-
-/** Fraction of the window still available, or null when nothing has been recorded yet. */
-function remaining(util: number | null): number | null {
-  return util === null ? null : Math.max(0, Math.min(1, 1 - util));
-}
 
 /** Ranks devices by one metric, splitting off a bottom group that never repeats the top. */
 function rank(rows: LeaderRow[], metric: (r: LeaderRow) => number): Leaderboard {
@@ -69,7 +59,6 @@ function rank(rows: LeaderRow[], metric: (r: LeaderRow) => number): Leaderboard 
 
 export function publicSnapshot(now = Date.now()): PublicSnapshot {
   const w = windowsAt(now);
-  const upstream = db().select().from(upstreamQuota).where(eq(upstreamQuota.id, 1)).get() ?? null;
 
   // Left join so a device that sent nothing this week still ranks, at zero.
   const rows = db()
@@ -92,17 +81,40 @@ export function publicSnapshot(now = Date.now()): PublicSnapshot {
     .all();
 
   return {
-    quota: {
-      fiveHourRemaining: remaining(upstream?.fiveHourUtil ?? null),
-      fiveHourReset: upstream?.fiveHourReset ?? null,
-      weeklyRemaining: remaining(upstream?.weeklyUtil ?? null),
-      weeklyReset: upstream?.weeklyReset ?? null,
-      updatedAt: upstream?.updatedAt ?? null,
-    },
     byTokens: rank(rows, (r) => r.tokens),
     byCost: rank(rows, (r) => r.cost),
     deviceCount: rows.length,
     weekStart: w.weekStart,
+  };
+}
+
+export type PublicCapacity = {
+  /** Fraction of the window still available, or null when nothing has been recorded yet. */
+  fiveHourRemaining: number | null;
+  fiveHourReset: Date | null;
+  weeklyRemaining: number | null;
+  weeklyReset: Date | null;
+  updatedAt: Date | null;
+  /** Null unless TeamClaude reported its accounts; counts only, never names. */
+  accounts: { total: number; withHeadroom: number } | null;
+};
+
+/** The pool's remaining capacity, stripped of anything that identifies an account. */
+export function publicCapacity(pool: PoolQuota): PublicCapacity {
+  const enabled = pool.accounts.filter((a) => a.state !== "disabled");
+  return {
+    fiveHourRemaining: pool.fiveHour ? 1 - pool.fiveHour.used : null,
+    fiveHourReset: pool.fiveHour?.resetAt ?? null,
+    weeklyRemaining: pool.weekly ? 1 - pool.weekly.used : null,
+    weeklyReset: pool.weekly?.resetAt ?? null,
+    updatedAt: pool.updatedAt,
+    accounts:
+      pool.source === "teamclaude"
+        ? {
+            total: enabled.length,
+            withHeadroom: enabled.filter((a) => a.state === "available" || a.state === "throttled").length,
+          }
+        : null,
   };
 }
 

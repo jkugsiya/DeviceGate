@@ -24,6 +24,7 @@ How DeviceGate works inside, and why it's built this way. For setup and day-to-d
                                    │  OAuth token + refresh   │
                                    │  upstream quota tracking │
                                    │  429 classification      │
+                                   │  account pool + rotation │
                                    └────────────┬─────────────┘
                                                 ▼
                                          api.anthropic.com
@@ -32,8 +33,9 @@ How DeviceGate works inside, and why it's built this way. For setup and day-to-d
 **DeviceGate sits in front of [TeamClaude](https://github.com/KarpelesLab/teamclaude) as a sidecar
 rather than forking it.** TeamClaude already handles the fragile upstream work: OAuth login and
 token refresh, parsing `anthropic-ratelimit-unified-*`, telling the two kinds of 429 apart, and
-HTTP/1.1 connection pooling. DeviceGate owns only what TeamClaude doesn't have: per-device identity,
-policy and audit. The upstream is a URL plus a key, so it could be swapped out without touching the
+HTTP/1.1 connection pooling. When it holds several of your Claude accounts, it also decides which
+one serves each request and switches as one nears its limit. DeviceGate owns only what TeamClaude
+doesn't have: per-device identity, policy and audit. The upstream is a URL plus a key, so it could be swapped out without touching the
 policy code.
 
 TeamClaude binds to `127.0.0.1` only, with an `apiKey`, so DeviceGate is the only way in. The
@@ -83,7 +85,8 @@ usage_events         id, request_id, device_id, ts, model, endpoint,
                      cache_read_tokens, cost_usd,
                      status_code, error_type, aborted,
                      latency_ms, client_ip                    -- append-only, no prompts
-upstream_quota       singleton: 5h / 7d utilization + reset, status, raw headers
+upstream_quota       singleton: last response's 5h / 7d utilization + reset, status,
+                     raw headers (fallback for the capacity view)
 audit_events         id, ts, admin_user_id, action, target_type, target_id,
                      before(json), after(json), ip, user_agent
 (+ Better Auth tables: user, session, account, verification)
@@ -176,6 +179,30 @@ Other routes:
   server's). `lib/timezone.ts` handles DST: days are named by calendar keys and converted per zone,
   never by adding 24 hours.
 
+## Subscription capacity
+
+The admin overview and the status page show how much of the 5-hour and weekly windows is left.
+`lib/pool-quota.ts` reads it from TeamClaude's `GET /teamclaude/quota`, using the same key as the
+proxy:
+
+- One row per account: plan (from TeamClaude's tier weight), state, 5-hour and shared weekly use,
+  and Fable weekly use when the account reports its own bucket.
+- Pool totals, computed by DeviceGate: the average use across accounts, weighted by plan size (Pro
+  1, Max 5x 5, Max 20x 20), resetting when the soonest account does. Paused and errored accounts are
+  left out, because TeamClaude won't route to them. TeamClaude's own `aggregate` counts paused
+  accounts, so it isn't used. Accounts whose tier is unknown are left out too, unless no tier is
+  known at all, in which case every account counts equally.
+- The result is cached in memory for 30 seconds and shared by both pages, so page views never fan
+  out into TeamClaude calls.
+- **Fallback.** If the endpoint fails (unreachable, older TeamClaude, wrong key, unexpected shape),
+  the pages show the `upstream_quota` row instead, along with the reason. That row comes from the
+  `anthropic-ratelimit-unified-*` headers on the last proxied response, so with several accounts it
+  only describes whichever account served that request.
+
+TeamClaude learns an account's quota from traffic, or from `teamclaude probe`, which reads
+Anthropic's usage endpoint without spending quota. Without the probe, an idle account's figures go
+stale.
+
 ## Admin
 
 Every mutation is a **server action** with the same shape: `requireAdmin()` → Zod parse → one
@@ -197,7 +224,9 @@ diff. Secrets are never included: no tokens, no codes, no OAuth material.
 - The OAuth credential never leaves the gateway machine. PCs hold only their own revocable token.
 - No request or response bodies are logged, and `Authorization` is never logged.
 - The public page at `/` selects only device names, token counts and costs
-  (`lib/public-queries.ts`), so ids, IPs, notes and request logs can't leak onto it. The one
+  (`lib/public-queries.ts`), so ids, IPs, notes and request logs can't leak onto it. Subscription
+  capacity goes through `publicCapacity`, which keeps the pool totals and account counts and drops
+  account names (usually email addresses). The one
   exception is the "This PC" card: a browser whose address matches a device's last IP sees that
   device's own usage, quota limits and allowed models. IP matching isn't authentication
   (`X-Forwarded-For` can be forged on the LAN), so the card is read-only and shows nothing else.
@@ -212,8 +241,9 @@ Findings from the spike scripts in `spike/`, verified against Claude Code 2.1.27
 - `spike/passthrough.ts` swaps the token, restores the betas, streams SSE back and parses usage
   across chunk boundaries. It has been verified end to end against a real subscription through
   TeamClaude.
-- The upstream `anthropic-ratelimit-unified-*` headers come back through TeamClaude, so the gateway
-  reads subscription utilization from its own responses without polling.
+- The upstream `anthropic-ratelimit-unified-*` headers come back through TeamClaude. The gateway
+  records them as the fallback for the capacity view. With several accounts they describe only the
+  one that served each request, which is why the primary source is `/teamclaude/quota`.
 - A fresh `claude -p` session writes about 41K `cache_creation` tokens on its first request. Keep
   that in mind when picking token quotas.
 
@@ -223,6 +253,6 @@ Findings from the spike scripts in `spike/`, verified against Claude Code 2.1.27
 
 ## Out of scope
 
-Roles, multiple organizations, org-wide quotas, temporary overrides, Redis, Postgres, account
-rotation, prompt logging and SSO. DeviceGate is built for one owner and their own machines. See
+Roles, multiple organizations, org-wide quotas, temporary overrides, Redis, Postgres, prompt
+logging and SSO. Account rotation is TeamClaude's job: DeviceGate only displays the pool. DeviceGate is built for one owner and their own machines. See
 [Terms of use](../README.md#terms-of-use).

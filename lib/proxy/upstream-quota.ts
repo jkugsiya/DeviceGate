@@ -13,7 +13,11 @@ const epoch = (v: string | undefined) => {
   return n === null ? null : new Date(n * 1000);
 };
 
-/** Stores the subscription's 5h/7d utilization from response headers; no-op when absent. */
+/**
+ * Stores the 5h/7d utilization from a response's headers; no-op when absent. The capacity view's
+ * fallback (lib/pool-quota.ts): with several TeamClaude accounts it only describes the one that
+ * served this response.
+ */
 export function recordUpstreamQuota(db: DbOrTx, headers: Headers) {
   const raw: Record<string, string> = {};
   headers.forEach((v, k) => {

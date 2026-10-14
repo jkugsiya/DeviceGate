@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Actor } from "../lib/audit";
 import { type DB, migrateDb, openDb } from "../lib/db/client";
-import { devicePolicies, devices, upstreamQuota, usageEvents } from "../lib/db/schema";
+import { devicePolicies, devices, usageEvents } from "../lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createDevice, setDeviceStatus } from "../lib/devices";
-import { devicesAtIp, normalizeIp, publicSnapshot, usageTotals, usageTrend } from "../lib/public-queries";
+import type { PoolAccount, PoolQuota } from "../lib/pool-quota";
+import { devicesAtIp, normalizeIp, publicCapacity, publicSnapshot, usageTotals, usageTrend } from "../lib/public-queries";
 import { dayStartAt } from "../lib/timezone";
 
 const actor: Actor = { adminUserId: "admin-1", ip: "10.0.0.5", userAgent: "test" };
@@ -102,23 +103,46 @@ describe("publicSnapshot leaderboard", () => {
     expect(s.byTokens.max).toBe(1_000_000);
     expect(s.byCost.max).toBe(90);
   });
+});
+
+describe("publicCapacity", () => {
+  const window = (used: number) => ({ used, resetAt: new Date() });
+  const pool = (over: Partial<PoolQuota> = {}): PoolQuota => ({
+    source: "teamclaude",
+    fiveHour: null,
+    weekly: null,
+    accounts: [],
+    updatedAt: new Date(),
+    error: null,
+    ...over,
+  });
+  const account = (state: PoolAccount["state"]): PoolAccount => ({
+    name: "me@example.com",
+    plan: "Max 20x",
+    state,
+    fiveHour: null,
+    weekly: null,
+    fable: null,
+  });
 
   it("reports capacity as what is left, not what was used", () => {
-    db.insert(upstreamQuota)
-      .values({ id: 1, fiveHourUtil: 0.17, weeklyUtil: 0.54, raw: {}, updatedAt: new Date() })
-      .run();
-    const s = publicSnapshot();
-    expect(s.quota.fiveHourRemaining).toBeCloseTo(0.83, 10);
-    expect(s.quota.weeklyRemaining).toBeCloseTo(0.46, 10);
+    const c = publicCapacity(pool({ fiveHour: window(0.17), weekly: window(0.54) }));
+    expect(c.fiveHourRemaining).toBeCloseTo(0.83, 10);
+    expect(c.weeklyRemaining).toBeCloseTo(0.46, 10);
   });
 
-  it("reports null capacity before any request has been seen", () => {
-    expect(publicSnapshot().quota.fiveHourRemaining).toBeNull();
+  it("reports null capacity before anything has been recorded", () => {
+    expect(publicCapacity(pool({ source: "none" })).fiveHourRemaining).toBeNull();
   });
 
-  it("clamps a utilisation above 100% to zero remaining rather than a negative", () => {
-    db.insert(upstreamQuota).values({ id: 1, fiveHourUtil: 1.4, raw: {}, updatedAt: new Date() }).run();
-    expect(publicSnapshot().quota.fiveHourRemaining).toBe(0);
+  it("counts accounts without naming them, leaving paused ones out", () => {
+    const c = publicCapacity(pool({ accounts: [account("available"), account("exhausted"), account("disabled")] }));
+    expect(c.accounts).toEqual({ total: 2, withHeadroom: 1 });
+    expect(JSON.stringify(c)).not.toContain("example.com");
+  });
+
+  it("has no account counts on the header fallback, which sees one account at a time", () => {
+    expect(publicCapacity(pool({ source: "headers", fiveHour: window(0.5) })).accounts).toBeNull();
   });
 });
 

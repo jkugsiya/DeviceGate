@@ -41,8 +41,11 @@ one used it. DeviceGate gives you:
 - **Usage and cost tracking.** Input, output and cache tokens for every request, plus what they
   would have cost at API rates. Break it down by device, model and day, filter it, and bookmark or
   share the view as a URL.
-- **Subscription capacity at a glance.** The remaining 5-hour and weekly utilization, read from
-  Anthropic's own response headers.
+- **Subscription capacity at a glance.** The 5-hour and weekly utilization of every Claude account
+  TeamClaude holds, plus the total across them, read from TeamClaude's quota endpoint.
+- **More than one subscription, if you need it.** When one plan isn't enough, sign TeamClaude in to
+  more of your own accounts. It moves to the next one as an account nears its limit, and your
+  devices keep working. See [More than one Claude account](#more-than-one-claude-account).
 - **Audit log.** Every admin action and sign-in attempt, with before/after diffs.
 - **Private by design.** Prompts and responses are never stored. Tokens and setup codes are kept
   only as hashes.
@@ -65,6 +68,12 @@ Read this before deploying.
   several people need Claude Code, each should sign in with their own subscription, or your
   organization should use a Team/Enterprise plan or API keys from the
   [Claude Console](https://platform.claude.com/).
+- **Several subscriptions must all be yours:** bought by you, used by you, through the real Claude
+  Code. Claude Code itself offers to switch to another account you own when you hit a limit, and
+  TeamClaude automates that switch. Anthropic hasn't explicitly approved automatic switching, so
+  weigh it against the current terms yourself. TeamClaude's
+  [compliance notes](https://github.com/KarpelesLab/teamclaude/blob/main/docs/compliance.md) cover
+  this in more detail.
 - Claude sign-in is handled by [TeamClaude](https://github.com/KarpelesLab/teamclaude) through
   Anthropic's own OAuth flow. DeviceGate never sees your Claude password or OAuth tokens.
 - Anthropic may enforce these terms without notice. Deciding whether your setup complies is your
@@ -72,8 +81,9 @@ Read this before deploying.
 
 ## How it works
 
-1. You sign in to your Claude account once, with TeamClaude, on the gateway machine. TeamClaude
-   listens only on `127.0.0.1`.
+1. You sign in to your Claude account once, with TeamClaude, on the gateway machine (or to several
+   of your own accounts, which TeamClaude switches between). TeamClaude listens only on
+   `127.0.0.1`.
 2. DeviceGate runs next to it on your LAN. It authenticates each PC's device token and applies that
    device's model allow-list and limits. It then forwards the request to TeamClaude with the only
    credential it holds.
@@ -106,6 +116,7 @@ bun install
 ```sh
 bun add -g @karpeleslab/teamclaude     # or: npm install -g @karpeleslab/teamclaude
 teamclaude login                        # choose 1 (Claude subscription), finish in the browser
+teamclaude probe 300                    # keep the capacity figures fresh while your PCs are idle
 teamclaude server --headless            # keep this running (see "Run as a service")
 ```
 
@@ -163,7 +174,7 @@ Everything is set in `.env.local`. [`.env.example`](.env.example) documents the 
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `UPSTREAM_API_KEY` | yes | TeamClaude's `proxy.apiKey`, from `~/.config/teamclaude.json`. |
+| `UPSTREAM_API_KEY` | yes | TeamClaude's `proxy.apiKey`, from `~/.config/teamclaude.json`. Also used to read its quota endpoint. |
 | `UPSTREAM_URL` | no | TeamClaude's address. Default `http://127.0.0.1:3456`. Keep it on loopback. |
 | `BETTER_AUTH_SECRET` | yes | Signs admin sessions. Generate with `openssl rand -base64 32`. |
 | `BETTER_AUTH_URL` | yes | The gateway's LAN URL, e.g. `http://192.168.1.50:3000`. |
@@ -227,6 +238,39 @@ sudo loginctl enable-linger $USER     # keep them running while you're logged ou
 
 On macOS, a `launchd` agent with the same two commands does the job.
 
+## More than one Claude account
+
+If you keep running out on one subscription, TeamClaude can hold several of **your own** accounts
+and switch between them. DeviceGate needs no extra setup: it still talks to the one TeamClaude.
+
+```sh
+teamclaude login                 # once per account
+teamclaude priority <name> 1     # optional: the order to use them in, lowest first
+teamclaude accounts              # check they're all there
+```
+
+TeamClaude stays on one account until it nears its 5-hour or weekly limit (98% by default), then
+moves to the next. A request refused for quota is resent on another account, so Claude Code never
+sees the limit while any account has room left. Set `"distributeSessions": "adaptive"` in
+`~/.config/teamclaude.json` to spread parallel sessions across accounts while keeping each
+conversation on one of them. The
+[routing docs](https://github.com/KarpelesLab/teamclaude/blob/main/docs/routing.md) cover this and
+the other settings.
+
+Each personal Max login is its own organization, so a conversation that moves to another account
+starts again with a cold prompt cache. TeamClaude only switches near a limit, so this is rare.
+
+The admin overview lists every account with its plan, status and 5-hour and weekly use, plus totals
+across the accounts in rotation. The totals are weighted by plan size, so a Max 20x counts four
+times as much as a Max 5x, and paused accounts are left out. The status page shows only those totals
+and how many accounts have capacity left, never account names.
+
+DeviceGate reads these figures from TeamClaude's `GET /teamclaude/quota` (TeamClaude 1.1.25 or
+newer) at most every 30 seconds. TeamClaude only learns an account's quota from traffic through it,
+so keep `teamclaude probe 300` on, or idle accounts show stale figures. If the endpoint fails,
+DeviceGate falls back to the rate-limit headers on the last response, which describe only the
+account that served it. The admin says when this happens.
+
 ## Updating
 
 ```sh
@@ -279,7 +323,7 @@ flags as "no price", run `bun run recompute-costs`.
 <img src="docs/screenshots/status.png" alt="Public status page" width="600">
 
 `/` needs no login. It shows the subscription capacity left in the current 5-hour and weekly
-windows, tokens and API-equivalent cost all time and today, a chart of either over the last 24
+windows (across all your accounts, if TeamClaude has several), tokens and API-equivalent cost all time and today, a chart of either over the last 24
 hours (by hour) or 7, 30, 90 days or all time (by day), and this week's devices ranked by tokens and
 by cost. Only device **names** and totals appear there (`lib/public-queries.ts` selects nothing else). If the gateway can be reached beyond
 your LAN, restrict `/` at your reverse proxy.

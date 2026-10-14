@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Subscription capacity for every Claude account TeamClaude holds, read from its
+  `GET /teamclaude/quota` endpoint: plan, status, and 5-hour, weekly and Fable weekly use per
+  account on the admin overview.
+- Pool totals weighted by plan size on the admin overview and the status page. The status page
+  shows how many accounts have capacity left, never their names.
+- README section on running several of your own Claude accounts through TeamClaude, and on
+  `teamclaude probe` for keeping idle accounts' figures fresh.
+
+### Changed
+
+- Capacity figures no longer depend on recent traffic through DeviceGate. The response-header
+  reading is kept only as a fallback when TeamClaude's quota endpoint is unavailable.
+
 ## [0.1.0] - 2026-09-28
 
 First public release.

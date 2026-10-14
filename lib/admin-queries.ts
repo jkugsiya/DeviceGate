@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "./db/client";
-import { auditEvents, deviceModels, devicePolicies, devices, deviceTokens, models, upstreamQuota, usageEvents, user } from "./db/schema";
+import { auditEvents, deviceModels, devicePolicies, devices, deviceTokens, models, usageEvents, user } from "./db/schema";
 import { windowsAt } from "./policy/windows";
 
 // Read models for the admin pages. Token figures are quota tokens (input + cache writes + output);
@@ -68,9 +68,8 @@ export function dashboardData() {
     }),
     { dayRequests: 0, dayTokens: 0, dayCost: 0, dayBlocked: 0, weekRequests: 0, weekTokens: 0, weekCost: 0 },
   );
-  const upstream = db().select().from(upstreamQuota).where(eq(upstreamQuota.id, 1)).get() ?? null;
   const w = windowsAt(now);
-  return { devices: rows, totals, upstream, windows: w };
+  return { devices: rows, totals, windows: w };
 }
 
 export function deviceDetail(id: string) {

@@ -4,31 +4,18 @@ import { usageByModel } from "@/lib/usage-queries";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { dashboardData } from "@/lib/admin-queries";
-import { fmtAgo, fmtIn, fmtNumber, fmtTokens, fmtUsd } from "@/lib/format";
+import { poolQuota } from "@/lib/pool-quota";
+import { fmtAgo, fmtNumber, fmtTokens, fmtUsd } from "@/lib/format";
 import { TIME_ZONE } from "@/lib/timezone";
 import { Flash } from "../_components/flash";
 import { one } from "../_components/query";
 import { ModelShare } from "../_components/model-share";
 import { SortableHead } from "../_components/sortable";
 import { StatCard } from "../_components/stats";
+import { SubscriptionPool } from "../_components/subscription-pool";
 import { BreakdownTable } from "../_components/usage-tables";
-
-function QuotaBar({ label, util, reset }: { label: string; util: number | null; reset: Date | null }) {
-  const pct = util === null ? null : Math.round(util * 100);
-  return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between text-sm">
-        <span className="font-medium">{label}</span>
-        <span className="font-mono tabular-nums">{pct === null ? "—" : `${pct}%`}</span>
-      </div>
-      <Progress value={pct ?? 0} />
-      <p className="text-xs text-muted-foreground">Resets {fmtIn(reset)}</p>
-    </div>
-  );
-}
 
 function DeviceStatus({ status, connected }: { status: string; connected: boolean }) {
   if (status !== "enabled") return <Badge variant="destructive">Disabled</Badge>;
@@ -65,7 +52,8 @@ function sortDevices(rows: DeviceRow[], sort: string, dir: "asc" | "desc"): Devi
 
 export default async function OverviewPage({ searchParams }: PageProps<"/admin">) {
   const params = await searchParams;
-  const { devices: allDevices, totals, upstream, windows } = dashboardData();
+  const { devices: allDevices, totals, windows } = dashboardData();
+  const pool = await poolQuota();
   const dir = one(params, "ddir") === "asc" ? "asc" : "desc";
   const sort = one(params, "dsort") || "name";
   const devices = sortDevices(allDevices, sort, sort === "name" ? (dir === "asc" ? "asc" : "desc") : dir);
@@ -123,20 +111,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/admin">
           />
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Claude subscription</CardTitle>
-            <CardDescription>
-              {upstream
-                ? `Status ${upstream.status ?? "unknown"} · updated ${fmtAgo(upstream.updatedAt)}`
-                : "No requests seen yet"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-6 sm:grid-cols-2">
-            <QuotaBar label="5-hour window" util={upstream?.fiveHourUtil ?? null} reset={upstream?.fiveHourReset ?? null} />
-            <QuotaBar label="Weekly" util={upstream?.weeklyUtil ?? null} reset={upstream?.weeklyReset ?? null} />
-          </CardContent>
-        </Card>
+        <SubscriptionPool pool={pool} />
       </div>
 
       <section className="space-y-3">

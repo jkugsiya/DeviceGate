@@ -18,6 +18,6 @@ It is for one person's own machines. Anthropic's Consumer Terms don't allow rout
 - Per-device model allow-lists that match by family prefix (Opus, Sonnet, Haiku)
 - Daily and weekly request and token quotas, requests per minute, concurrent requests
 - Usage by device, model and day, with API-equivalent cost
-- Remaining 5-hour and weekly subscription capacity from Anthropic's response headers
+- Remaining 5-hour and weekly subscription capacity, per Claude account and pooled across them, from TeamClaude
 - Audit log of admin actions and sign-ins
 - One-line device setup on macOS, Linux and Windows
