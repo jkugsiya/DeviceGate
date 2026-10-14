@@ -47,9 +47,10 @@ export function updateDeviceDetails(db: DB, actor: Actor, id: string, input: { n
   });
 }
 
+/** Returns the device's name, for the admin's confirmation. */
 export function setDeviceStatus(db: DB, actor: Actor, id: string, status: "enabled" | "disabled") {
   const before = getDevice(db, id);
-  if (before.status === status) return;
+  if (before.status === status) return before.name;
   db.transaction((tx) => {
     tx.update(devices).set({ status }).where(eq(devices.id, id)).run();
     audit(tx, actor, {
@@ -60,6 +61,7 @@ export function setDeviceStatus(db: DB, actor: Actor, id: string, status: "enabl
       after: { status },
     });
   });
+  return before.name;
 }
 
 /** Revokes every live token and issues a new one, shown once. */
@@ -122,10 +124,11 @@ export function updateDevicePolicy(
   });
 }
 
+/** Returns the model family's display name, for the admin's confirmation. */
 export function setModelEnabled(db: DB, actor: Actor, modelId: string, enabled: boolean) {
   const before = db.select().from(models).where(eq(models.id, modelId)).get();
   if (!before) throw new NotFoundError(`Model ${modelId} not found`);
-  if (before.enabled === enabled) return;
+  if (before.enabled === enabled) return before.displayName;
   db.transaction((tx) => {
     tx.update(models).set({ enabled }).where(eq(models.id, modelId)).run();
     audit(tx, actor, {
@@ -136,6 +139,7 @@ export function setModelEnabled(db: DB, actor: Actor, modelId: string, enabled: 
       after: { enabled },
     });
   });
+  return before.displayName;
 }
 
 function stripDeviceId<T extends { deviceId: string }>(row: T | undefined) {

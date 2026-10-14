@@ -16,8 +16,10 @@ type Tier = { input: number; output: number };
 
 type PriceEntry = {
   base: Tier;
-  /** Rates for a prompt over 200K tokens. Absent when the model prices its whole window flat. */
+  /** Rates for a prompt over `longAbove` tokens. Absent when the model prices its whole window flat. */
   long?: Tier;
+  /** Prompt size at which `long` starts to apply. Defaults to 200K; Haiku 5.5 splits at 100K. */
+  longAbove?: number;
   /** Cache-read cost as a multiple of input. */
   cacheRead?: number;
 };
@@ -40,6 +42,7 @@ const PRICES: Record<string, PriceEntry> = {
   "claude-sonnet-4-6": { base: { input: 3, output: 15 } },
   "claude-sonnet-4-5": { base: { input: 3, output: 15 }, long: { input: 6, output: 22.5 } },
   "claude-sonnet-4": { base: { input: 3, output: 15 }, long: { input: 6, output: 22.5 } },
+  "claude-haiku-5-5": { base: { input: 0.1, output: 0.5 }, long: { input: 0.5, output: 2.5 }, longAbove: 100_000 },
   "claude-haiku-4-5": { base: { input: 1, output: 5 } },
   "claude-haiku-3-5": { base: { input: 0.8, output: 4 } },
   "claude-fable-5-1": { base: { input: 10, output: 50 }, cacheRead: 0.025 },
@@ -51,7 +54,7 @@ const PRICES: Record<string, PriceEntry> = {
 const CACHE_WRITE_5M = 1.25;
 const CACHE_WRITE_1H = 2;
 const CACHE_READ = 0.1;
-const LONG_CONTEXT_TOKENS = 200_000;
+const LONG_CONTEXT_DEFAULT = 200_000;
 const PER_MILLION = 1_000_000;
 
 /** What one million tokens of each kind costs, in US$. */
@@ -96,13 +99,13 @@ function ratesFrom(tier: Tier, cacheRead: number): Rates {
 /**
  * Rates that apply to a request, or null when the model isn't priced here. `promptTokens` picks
  * the long-context tier: Anthropic bills the whole request at the higher rate once the prompt
- * (input + cache reads + cache writes) passes 200K.
+ * (input + cache reads + cache writes) passes the model's threshold (200K, or 100K on Haiku 5.5).
  */
 export function ratesFor(model: string | null | undefined, promptTokens = 0): Rates | null {
   if (!model) return null;
   const entry = entryFor(model);
   if (!entry) return null;
-  const tier = entry.long && promptTokens > LONG_CONTEXT_TOKENS ? entry.long : entry.base;
+  const tier = entry.long && promptTokens > (entry.longAbove ?? LONG_CONTEXT_DEFAULT) ? entry.long : entry.base;
   return ratesFrom(tier, entry.cacheRead ?? CACHE_READ);
 }
 

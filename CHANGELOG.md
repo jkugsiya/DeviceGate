@@ -25,6 +25,14 @@ All notable changes to this project are documented here. The format follows
 - Capacity figures no longer depend on recent traffic through DeviceGate. The response-header
   reading is kept only as a fallback when TeamClaude's quota endpoint is unavailable.
 
+### Fixed
+
+- Claude Haiku 5.5 is priced: $0.10 / $0.50 per million input / output tokens, or $0.50 / $2.50
+  once the prompt passes 100K tokens. Its requests used to record no cost. The gateway prices
+  them on its next start.
+- The admin's enable/disable toasts for devices and models named the opposite of what had just
+  happened.
+
 ## [0.1.0] - 2026-09-28
 
 First public release.

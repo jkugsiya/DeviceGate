@@ -56,12 +56,13 @@ const str = (f: FormData, key: string) => String(f.get(key) ?? "");
 
 /**
  * Runs a mutation and reports the outcome to the form, so every action ends in a visible toast
- * instead of silence. Never wrap `redirect()` in this — it signals by throwing.
+ * instead of silence. `fn` may return the toast's text. Never wrap `redirect()` in this — it
+ * signals by throwing.
  */
-function run(fn: () => void): FormResult {
+function run(fn: () => string | void): FormResult {
   try {
-    fn();
-    return { ok: true, at: Date.now() };
+    const message = fn();
+    return { ok: true, at: Date.now(), ...(message && { message }) };
   } catch (err) {
     console.error("[admin] action failed:", err);
     return { error: err instanceof Error ? err.message : "Something went wrong." };
@@ -70,7 +71,8 @@ function run(fn: () => void): FormResult {
 
 export type TokenResult = { token: string } | { error: string } | null;
 export type SetupResult = { code: string; expiresAt: number; deviceId: string; name: string } | { error: string } | null;
-// `message` is for toasts that must describe what happened rather than the state the form now shows.
+// `message` is the toast's text when it must describe what happened: a toggle's props have already
+// flipped by the time the result arrives, so they can't say which way it went.
 export type FormResult = { ok: true; at: number; message?: string } | { error: string } | null;
 
 export async function createDeviceAction(_prev: SetupResult, form: FormData): Promise<SetupResult> {
@@ -140,7 +142,8 @@ export async function setDeviceStatusAction(
   _prev: FormResult,
 ): Promise<FormResult> {
   const { actor } = await requireAdmin();
-  const result = run(() => setDeviceStatus(db(), actor, id.parse(deviceId), z.enum(["enabled", "disabled"]).parse(status)));
+  const next = z.enum(["enabled", "disabled"]).parse(status);
+  const result = run(() => `${setDeviceStatus(db(), actor, id.parse(deviceId), next)} ${next}`);
   revalidatePath("/admin", "layout");
   return result;
 }
@@ -167,7 +170,11 @@ export async function deleteDeviceAction(deviceId: string, _prev: FormResult): P
 
 export async function setModelEnabledAction(modelId: string, enabled: boolean, _prev: FormResult): Promise<FormResult> {
   const { actor } = await requireAdmin();
-  const result = run(() => setModelEnabled(db(), actor, z.string().max(40).parse(modelId), z.boolean().parse(enabled)));
+  const on = z.boolean().parse(enabled);
+  const result = run(() => {
+    const name = setModelEnabled(db(), actor, z.string().max(40).parse(modelId), on);
+    return on ? `${name} enabled` : `${name} disabled for every device`;
+  });
   revalidatePath("/admin", "layout");
   return result;
 }

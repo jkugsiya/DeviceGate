@@ -38,6 +38,13 @@ describe("ratesFor", () => {
     expect(ratesFor("claude-sonnet-5", 900_000)?.input).toBe(2);
   });
 
+  it("moves Haiku 5.5 to its higher rate card above a 100K prompt, not 200K", () => {
+    const flat = ratesFor("claude-haiku-5-5", 100_000)!;
+    expect(flat).toMatchObject({ input: 0.1, output: 0.5, cacheWrite5m: 0.125, cacheWrite1h: 0.2 });
+    expect(flat.cacheRead).toBeCloseTo(0.01, 10);
+    expect(ratesFor("claude-haiku-5-5", 150_000)).toMatchObject({ input: 0.5, output: 2.5 });
+  });
+
   it("returns null for a model with no published price", () => {
     expect(ratesFor("gpt-5")).toBeNull();
     expect(ratesFor(null)).toBeNull();
