@@ -3,12 +3,14 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { cn } from "cn";
 import { fmtAgo, fmtIn, fmtNumber, fmtTokens, fmtUsd } from "@/lib/format";
+import type { AccountState, QuotaWindow } from "@/lib/pool-quota";
 import { poolQuota } from "@/lib/pool-quota";
 import { clientIp } from "@/lib/proxy/forward";
 import {
   devicesAtIp,
   type Leaderboard,
   type LeaderRow,
+  type PublicAccount,
   publicCapacity,
   publicSnapshot,
   type Totals,
@@ -72,6 +74,87 @@ function Capacity({ label, remaining, reset }: { label: string; remaining: numbe
         {reset ? `Resets ${fmtIn(reset)}` : "No usage recorded yet"}
       </p>
     </div>
+  );
+}
+
+/** One account's window as what is left, matching the headline figures above it. */
+function AccountWindow({ label, window }: { label: string; window: QuotaWindow | null }) {
+  const pct = window === null ? null : Math.round((1 - window.used) * 100);
+  const low = pct !== null && pct <= 15;
+  return (
+    <div className="space-y-1.5">
+      <p className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
+        <span>{label}</span>
+        <span className={cn("font-mono text-sm tabular-nums", low ? "font-medium text-destructive" : "text-foreground")}>
+          {pct === null ? "—" : `${pct}% left`}
+        </span>
+      </p>
+      <div
+        className="h-1 overflow-hidden rounded-full bg-muted"
+        role="meter"
+        aria-valuenow={pct ?? 0}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${label} remaining`}
+      >
+        <div
+          className={cn("h-full rounded-full", low ? "bg-destructive" : "bg-chart-1")}
+          style={{ width: `${pct === null ? 0 : 100 - pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">{window?.resetAt ? `Resets ${fmtIn(window.resetAt)}` : "\u00a0"}</p>
+    </div>
+  );
+}
+
+const ACCOUNT_STATE: Record<AccountState, { label: string; dot: string }> = {
+  available: { label: "Available", dot: "bg-emerald-500" },
+  throttled: { label: "Rate limited", dot: "bg-amber-500" },
+  exhausted: { label: "Limit reached", dot: "bg-destructive" },
+  disabled: { label: "Paused", dot: "bg-muted-foreground" },
+  error: { label: "Error", dot: "bg-destructive" },
+};
+
+/**
+ * Every TeamClaude account, so a PC that gets a 429 can see whether the whole pool is out.
+ * Accounts are numbered, never named.
+ */
+function Accounts({ accounts, withHeadroom, total }: { accounts: PublicAccount[]; withHeadroom: number; total: number }) {
+  const showFable = accounts.some((a) => a.fable);
+  return (
+    <section className="space-y-5">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="font-heading text-lg font-semibold tracking-tight">Accounts</h2>
+        <p className={cn("text-sm text-muted-foreground", withHeadroom === 0 && "font-medium text-destructive")}>
+          {withHeadroom} of {total} with capacity left
+        </p>
+      </div>
+      <ul className="divide-y divide-border rounded-2xl bg-card ring-1 ring-foreground/10">
+        {accounts.map((a) => {
+          const state = ACCOUNT_STATE[a.state];
+          return (
+            <li key={a.label} className={cn("space-y-4 px-6 py-5", a.state === "disabled" && "opacity-60")}>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <p className="font-medium">
+                  {a.label}
+                  {a.plan && <span className="font-normal text-muted-foreground"> · {a.plan}</span>}
+                </p>
+                {/* The dot repeats the words; status is never colour alone. */}
+                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <span className={cn("size-1.5 rounded-full", state.dot)} aria-hidden />
+                  {state.label}
+                </p>
+              </div>
+              <div className={cn("grid gap-x-8 gap-y-4", showFable ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+                <AccountWindow label="5-hour" window={a.fiveHour} />
+                <AccountWindow label="Weekly" window={a.weekly} />
+                {showFable && <AccountWindow label="Fable weekly" window={a.fable} />}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -431,9 +514,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         </div>
         <p className="text-sm text-muted-foreground">
           Subscription capacity and usage
-          {quota.accounts
-            ? quota.accounts.total > 1 && ` · ${quota.accounts.withHeadroom} of ${quota.accounts.total} accounts with capacity left`
-            : quota.updatedAt && ` · updated ${fmtAgo(quota.updatedAt)}`}
+          {/* TeamClaude's figures are live; the header fallback can be hours old, so it says when. */}
+          {!quota.accounts && quota.updatedAt && ` · updated ${fmtAgo(quota.updatedAt)}`}
         </p>
       </header>
 
@@ -442,6 +524,10 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         <div className="hidden w-px bg-border sm:block" aria-hidden />
         <Capacity label="This week" remaining={quota.weeklyRemaining} reset={quota.weeklyReset} />
       </section>
+
+      {quota.accounts && quota.accounts.list.length > 1 && (
+        <Accounts accounts={quota.accounts.list} withHeadroom={quota.accounts.withHeadroom} total={quota.accounts.total} />
+      )}
 
       {mine.map((d, i) => (
         // Names aren't unique, and the page deliberately has no device ids.

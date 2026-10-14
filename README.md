@@ -262,8 +262,9 @@ starts again with a cold prompt cache. TeamClaude only switches near a limit, so
 
 The admin overview lists every account with its plan, status and 5-hour and weekly use, plus totals
 across the accounts in rotation. The totals are weighted by plan size, so a Max 20x counts four
-times as much as a Max 5x, and paused accounts are left out. The status page shows only those totals
-and how many accounts have capacity left, never account names.
+times as much as a Max 5x, and paused accounts are left out. The status page shows the same totals and
+each account's plan, status and remaining capacity, so a PC that gets a 429 can see whether the
+pool is out. Accounts appear there as "Account 1", "Account 2"…, never by name.
 
 DeviceGate reads these figures from TeamClaude's `GET /teamclaude/quota` (TeamClaude 1.1.25 or
 newer) at most every 30 seconds. TeamClaude only learns an account's quota from traffic through it,
