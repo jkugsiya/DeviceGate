@@ -52,7 +52,7 @@ export default function ModelsPage() {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{m.devices}</TableCell>
                   <TableCell className="text-right">
-                    <ModelToggle modelId={m.id} displayName={m.displayName} enabled={m.enabled} />
+                    <ModelToggle modelId={m.id} enabled={m.enabled} />
                   </TableCell>
                 </TableRow>
               );

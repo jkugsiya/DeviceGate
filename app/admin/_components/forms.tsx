@@ -263,7 +263,7 @@ export function DeviceControls({ deviceId, name, status }: { deviceId: string; n
     setDeviceStatusAction.bind(null, deviceId, enabled ? "disabled" : "enabled"),
     null,
   );
-  useActionToast(state, enabled ? `${name} disabled` : `${name} enabled`);
+  useActionToast(state);
 
   return (
     <div className="space-y-3">
@@ -291,9 +291,9 @@ export function DeviceControls({ deviceId, name, status }: { deviceId: string; n
   );
 }
 
-export function ModelToggle({ modelId, displayName, enabled }: { modelId: string; displayName: string; enabled: boolean }) {
+export function ModelToggle({ modelId, enabled }: { modelId: string; enabled: boolean }) {
   const [state, action, pending] = useActionState(setModelEnabledAction.bind(null, modelId, !enabled), null);
-  useActionToast(state, enabled ? `${displayName} disabled for every device` : `${displayName} enabled`);
+  useActionToast(state);
   return (
     <form action={action}>
       <Button type="submit" size="sm" variant={enabled ? "outline" : "default"} disabled={pending}>
@@ -306,9 +306,7 @@ export function ModelToggle({ modelId, displayName, enabled }: { modelId: string
 /** Takes a TeamClaude account out of rotation, or puts it back. */
 export function AccountPauseToggle({ name, paused }: { name: string; paused: boolean }) {
   const [state, action, pending] = useActionState(setAccountPausedAction.bind(null, name, !paused), null);
-  // From the result, not `paused`: the refreshed page lands with the result, so the prop has
-  // already flipped by the time the toast is picked.
-  useActionToast(state, state && "message" in state ? state.message : undefined);
+  useActionToast(state);
   return (
     <form action={action}>
       <Button type="submit" size="sm" variant={paused ? "default" : "outline"} disabled={pending}>
