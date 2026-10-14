@@ -15,6 +15,8 @@ import {
   updateDevicePolicy,
 } from "@/lib/devices";
 import { createEnrollmentCode } from "@/lib/enrollment";
+import { audit } from "@/lib/audit";
+import { setAccountPaused } from "@/lib/pool-quota";
 
 const id = z.uuid();
 const name = z.string().trim().min(1, "Name is required").max(60);
@@ -68,7 +70,8 @@ function run(fn: () => void): FormResult {
 
 export type TokenResult = { token: string } | { error: string } | null;
 export type SetupResult = { code: string; expiresAt: number; deviceId: string; name: string } | { error: string } | null;
-export type FormResult = { ok: true; at: number } | { error: string } | null;
+// `message` is for toasts that must describe what happened rather than the state the form now shows.
+export type FormResult = { ok: true; at: number; message?: string } | { error: string } | null;
 
 export async function createDeviceAction(_prev: SetupResult, form: FormData): Promise<SetupResult> {
   const { actor } = await requireAdmin();
@@ -167,4 +170,24 @@ export async function setModelEnabledAction(modelId: string, enabled: boolean, _
   const result = run(() => setModelEnabled(db(), actor, z.string().max(40).parse(modelId), z.boolean().parse(enabled)));
   revalidatePath("/admin", "layout");
   return result;
+}
+
+/** Pauses or resumes a TeamClaude account. The change lives in TeamClaude; DeviceGate only audits it. */
+export async function setAccountPausedAction(account: string, paused: boolean, _prev: FormResult): Promise<FormResult> {
+  const { actor } = await requireAdmin();
+  const input = z.object({ account: z.string().trim().min(1).max(200), paused: z.boolean() }).parse({ account, paused });
+  try {
+    await setAccountPaused(input.account, input.paused);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not change the account." };
+  }
+  audit(db(), actor, {
+    action: input.paused ? "account.disable" : "account.enable",
+    targetType: "account",
+    targetId: input.account,
+    before: { disabled: !input.paused },
+    after: { disabled: input.paused },
+  });
+  revalidatePath("/admin");
+  return { ok: true, at: Date.now(), message: input.paused ? `${input.account} paused` : `${input.account} is back in rotation` };
 }

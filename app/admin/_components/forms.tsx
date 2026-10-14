@@ -24,6 +24,7 @@ import {
   deleteDeviceAction,
   type FormResult,
   rotateTokenAction,
+  setAccountPausedAction,
   type SetupResult,
   setDeviceStatusAction,
   setModelEnabledAction,
@@ -297,6 +298,21 @@ export function ModelToggle({ modelId, displayName, enabled }: { modelId: string
     <form action={action}>
       <Button type="submit" size="sm" variant={enabled ? "outline" : "default"} disabled={pending}>
         {pending ? "…" : enabled ? "Disable" : "Enable"}
+      </Button>
+    </form>
+  );
+}
+
+/** Takes a TeamClaude account out of rotation, or puts it back. */
+export function AccountPauseToggle({ name, paused }: { name: string; paused: boolean }) {
+  const [state, action, pending] = useActionState(setAccountPausedAction.bind(null, name, !paused), null);
+  // From the result, not `paused`: the refreshed page lands with the result, so the prop has
+  // already flipped by the time the toast is picked.
+  useActionToast(state, state && "message" in state ? state.message : undefined);
+  return (
+    <form action={action}>
+      <Button type="submit" size="sm" variant={paused ? "default" : "outline"} disabled={pending}>
+        {pending ? "…" : paused ? "Resume" : "Pause"}
       </Button>
     </form>
   );

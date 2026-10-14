@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type DB, migrateDb, openDb } from "../lib/db/client";
 import { upstreamQuota } from "../lib/db/schema";
-import { parsePool, poolQuota } from "../lib/pool-quota";
+import { parsePool, poolQuota, setAccountPaused } from "../lib/pool-quota";
 
 const HOUR = 3_600_000;
 const T0 = Date.parse("2026-10-14T12:00:00Z");
@@ -120,5 +120,41 @@ describe("poolQuota", () => {
     expect(pool.weekly?.used).toBe(1);
     expect(pool.accounts).toEqual([]);
     expect(pool.error).toMatch(/Update it/);
+  });
+});
+
+describe("setAccountPaused", () => {
+  const globals = globalThis as unknown as { __poolQuota?: unknown };
+
+  beforeEach(() => vi.stubEnv("UPSTREAM_API_KEY", "tc-key"));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("asks TeamClaude to disable the account by name, and drops the cached reading", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true, name: "me@example.com", disabled: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    globals.__poolQuota = { at: Date.now(), value: Promise.resolve(null) };
+    await setAccountPaused("me@example.com", true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:3456/teamclaude/disable",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "x-api-key": "tc-key", "content-type": "application/json" },
+        body: JSON.stringify({ account: "me@example.com", disabled: true }),
+      }),
+    );
+    expect(globals.__poolQuota).toBeUndefined();
+  });
+
+  it("passes TeamClaude's own refusal through", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ ok: false, error: 'no account matches "x"' }, { status: 400 })));
+    await expect(setAccountPaused("x", true)).rejects.toThrow('TeamClaude: no account matches "x"');
+  });
+
+  it("says to update a TeamClaude without the endpoint", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("not found", { status: 404 })));
+    await expect(setAccountPaused("me", false)).rejects.toThrow(/1\.1\.25/);
   });
 });

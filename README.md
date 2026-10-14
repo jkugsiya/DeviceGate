@@ -261,7 +261,8 @@ Each personal Max login is its own organization, so a conversation that moves to
 starts again with a cold prompt cache. TeamClaude only switches near a limit, so this is rare.
 
 The admin overview lists every account with its plan, status and 5-hour and weekly use, plus totals
-across the accounts in rotation. The totals are weighted by plan size, so a Max 20x counts four
+across the accounts in rotation. **Pause** takes an account out of TeamClaude's rotation and
+**Resume** puts it back; TeamClaude saves this to its config, so it survives a restart. The totals are weighted by plan size, so a Max 20x counts four
 times as much as a Max 5x, and paused accounts are left out. The status page shows the same totals and
 each account's plan, status and remaining capacity, so a PC that gets a 429 can see whether the
 pool is out. Accounts appear there as "Account 1", "Account 2"…, never by name.
