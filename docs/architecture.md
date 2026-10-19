@@ -78,7 +78,8 @@ device_policies      device_id, default_model_id,
                      daily_tokens, weekly_tokens,
                      daily_cost_usd, weekly_cost_usd,
                      requests_per_minute,
-                     max_concurrent                           -- NULL = unlimited
+                     max_concurrent                           -- NULL = use the default
+default_limits       singleton (id = 1): the same limit columns   -- NULL = unlimited
 usage_events         id, request_id, device_id, ts, model, endpoint,
                      input_tokens, output_tokens,
                      cache_creation_tokens, cache_creation_1h_tokens,
@@ -165,6 +166,9 @@ Other routes:
   the UI but don't count toward quota. Otherwise long Claude Code sessions would burn quota almost
   entirely on cache reads.
 - Quota is checked before the request, against usage so far, so one request can overshoot.
+- **Default limits** (`default_limits`, the admin's Limits page) fill every limit a device leaves
+  empty. A device's own value replaces the default, higher or lower. Each device still counts only
+  its own usage; there is no combined cap across devices.
 - **Spend limits** use the same `cost_usd` the usage pages show (API-equivalent, from
   `lib/pricing.ts`). A model with no published price counts as $0 toward them, so cap it with a
   token limit or leave it off the device's allow-list.
@@ -206,6 +210,13 @@ change to its config file and reloads, so DeviceGate stores nothing about it bey
 change. The endpoint needs TeamClaude's `proxy.apiKey`; a `clientKeys` key is refused. The cached
 reading is dropped on success, so the overview shows the new state straight away.
 
+**Deleting an account.** TeamClaude has no plain HTTP route for removal. The admin's Delete button
+calls the `remove_account` tool of TeamClaude's management endpoint (`POST /teamclaude/mcp`,
+JSON-RPC `tools/call`). That tool exists only with `"mcp": "full"` in TeamClaude's `proxy` config,
+and it deletes the account's saved login with no undo, so the dialog makes you type the name.
+Turning `"full"` on also lets any program on the gateway machine reconfigure TeamClaude without a
+key. An `account.delete` audit row is written once TeamClaude confirms.
+
 TeamClaude learns an account's quota from traffic, or from `teamclaude probe`, which reads
 Anthropic's usage endpoint without spending quota. Without the probe, an idle account's figures go
 stale.
@@ -218,7 +229,7 @@ components that query Drizzle directly.
 
 Audit actions: `device.create`, `device.update`, `device.disable`, `device.enable`,
 `device.rotate_token`, `device.delete`, `policy.update`, `model.update`, `enrollment.create`,
-`enrollment.used`, `enrollment.failed`, `account.disable`, `account.enable`, `admin.create`, `admin.password_reset`, `admin.login` and
+`enrollment.used`, `enrollment.failed`, `account.disable`, `account.enable`, `account.delete`, `limits.update_default`, `admin.create`, `admin.password_reset`, `admin.login` and
 `admin.login_failed`. Each stores a before/after JSON
 diff. Secrets are never included: no tokens, no codes, no OAuth material.
 

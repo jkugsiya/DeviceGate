@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto";
 import { type Actor, audit } from "./audit";
 import { issueDeviceToken, revokeDeviceTokens } from "./auth/device-token";
 import type { DB } from "./db/client";
-import { deviceModels, devicePolicies, devices, models } from "./db/schema";
+import { defaultLimits, deviceModels, devicePolicies, devices, models } from "./db/schema";
 import type { Limits } from "./policy/decide";
+import { loadDefaultLimits } from "./policy/load";
 
 // Device mutations shared by the admin UI and scripts/device.ts. Each runs in one transaction
 // together with its audit row.
@@ -18,7 +19,7 @@ function getDevice(db: DB, id: string) {
 }
 
 /**
- * Creates a device with access to every enabled model and no limits. It has no token until a PC
+ * Creates a device with access to every enabled model and the default limits. It has no token until a PC
  * redeems a setup code (lib/enrollment.ts) or an admin issues one with rotateDeviceToken.
  */
 export function createDevice(db: DB, actor: Actor, input: { name: string; notes?: string | null }) {
@@ -121,6 +122,18 @@ export function updateDevicePolicy(
       before: { limits: stripDeviceId(before.limits), allowedModelIds: before.allowedModelIds },
       after: { limits: input.limits, allowedModelIds: allowed },
     });
+  });
+}
+
+/** Sets the limits every device inherits for the fields it leaves empty. */
+export function updateDefaultLimits(db: DB, actor: Actor, limits: Limits) {
+  const before = loadDefaultLimits(db);
+  db.transaction((tx) => {
+    tx.insert(defaultLimits)
+      .values({ id: 1, ...limits })
+      .onConflictDoUpdate({ target: defaultLimits.id, set: limits })
+      .run();
+    audit(tx, actor, { action: "limits.update_default", targetType: "gateway", targetId: null, before, after: limits });
   });
 }
 

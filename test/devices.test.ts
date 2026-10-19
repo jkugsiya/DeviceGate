@@ -9,6 +9,7 @@ import {
   NotFoundError,
   rotateDeviceToken,
   setDeviceStatus,
+  updateDefaultLimits,
   updateDevicePolicy,
 } from "../lib/devices";
 import { admit, countersFor, NOTHING_SPENT, resetCounters } from "../lib/policy/counters";
@@ -47,6 +48,15 @@ describe("device mutations", () => {
     const policy = loadDevicePolicy(db, id);
     expect([...policy.allowedModelIds].sort()).toEqual(["fable", "haiku", "opus", "sonnet"]);
     expect(Object.values(policy.limits).every((v) => v === null)).toBe(true);
+  });
+
+  it("fills each limit a device leaves empty from the defaults", () => {
+    const { id } = createDevice(db, actor, { name: "laptop" });
+    const none = { dailyRequests: null, weeklyRequests: null, dailyTokens: null, weeklyTokens: null, dailyCostUsd: null, weeklyCostUsd: null, requestsPerMinute: null, maxConcurrent: null };
+    updateDefaultLimits(db, actor, { ...none, weeklyCostUsd: 50, maxConcurrent: 4 });
+    updateDevicePolicy(db, actor, id, { allowedModelIds: ["sonnet"], limits: { ...none, weeklyCostUsd: 200 } });
+    expect(loadDevicePolicy(db, id).limits).toEqual({ ...none, weeklyCostUsd: 200, maxConcurrent: 4 });
+    expect(db.select().from(auditEvents).all().map((r) => r.action)).toContain("limits.update_default");
   });
 
   it("writes exactly one audit row per change, without secrets", () => {

@@ -5,7 +5,7 @@ export type Actor = { adminUserId: string | null; ip: string | null; userAgent: 
 
 export type AuditEntry = {
   action: string;
-  targetType: "device" | "model" | "admin" | "account";
+  targetType: "device" | "model" | "admin" | "account" | "gateway";
   targetId: string | null;
   before?: unknown;
   after?: unknown;

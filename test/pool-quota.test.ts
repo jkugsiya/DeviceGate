@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type DB, migrateDb, openDb } from "../lib/db/client";
 import { upstreamQuota } from "../lib/db/schema";
-import { parsePool, poolQuota, setAccountPaused } from "../lib/pool-quota";
+import { parsePool, poolQuota, removeAccount, setAccountPaused } from "../lib/pool-quota";
 
 const HOUR = 3_600_000;
 const T0 = Date.parse("2026-10-14T12:00:00Z");
@@ -156,5 +156,42 @@ describe("setAccountPaused", () => {
   it("says to update a TeamClaude without the endpoint", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("not found", { status: 404 })));
     await expect(setAccountPaused("me", false)).rejects.toThrow(/1\.1\.25/);
+  });
+});
+
+describe("removeAccount", () => {
+  const globals = globalThis as unknown as { __poolQuota?: unknown };
+  const toolResult = (result: object) => Response.json({ jsonrpc: "2.0", id: 1, result });
+
+  beforeEach(() => vi.stubEnv("UPSTREAM_API_KEY", "tc-key"));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("calls TeamClaude's remove_account tool by name, and drops the cached reading", async () => {
+    const fetchMock = vi.fn(async () => toolResult({ content: [{ type: "text", text: "{}" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+    globals.__poolQuota = { at: Date.now(), value: Promise.resolve(null) };
+    await removeAccount("me@example.com");
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://127.0.0.1:3456/teamclaude/mcp");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      method: "tools/call",
+      params: { name: "remove_account", arguments: { account: "me@example.com" } },
+    });
+    expect(globals.__poolQuota).toBeUndefined();
+  });
+
+  it("explains how to turn the endpoint on when it is off or read-only", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ ok: false, error: "the MCP endpoint is off" }, { status: 404 })));
+    await expect(removeAccount("me")).rejects.toThrow(/"mcp": "full"/);
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ jsonrpc: "2.0", id: 1, error: { code: -32602, message: "Unknown tool: remove_account" } })));
+    await expect(removeAccount("me")).rejects.toThrow(/"mcp": "full"/);
+  });
+
+  it("passes the tool's own refusal through", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => toolResult({ isError: true, content: [{ type: "text", text: 'no account "x"' }] })));
+    await expect(removeAccount("x")).rejects.toThrow('TeamClaude: no account "x"');
   });
 });

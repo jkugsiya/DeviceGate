@@ -50,6 +50,13 @@
       "when": 1791188287808,
       "tag": "0006_policy_cost_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1792404859953,
+      "tag": "0007_default_limits",
+      "breakpoints": true
     }
   ]
 }

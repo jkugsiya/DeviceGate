@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
-import { deviceModels, devicePolicies, models } from "../db/schema";
+import { defaultLimits, deviceModels, devicePolicies, models } from "../db/schema";
 import type { Limits, ModelInfo } from "./decide";
 
 export type ModelRow = typeof models.$inferSelect;
@@ -25,6 +25,19 @@ export function resolveModel(registry: ModelRow[], requested: string): ModelInfo
   return best && { id: best.id, displayName: best.displayName, enabled: best.enabled };
 }
 
+const LIMIT_KEYS = Object.keys(UNLIMITED) as (keyof Limits)[];
+
+/** The gateway-wide limits a device inherits for every field it leaves empty. */
+export function loadDefaultLimits(db: DbOrTx): Limits {
+  const row = db.select().from(defaultLimits).where(eq(defaultLimits.id, 1)).get();
+  return effectiveLimits(row, UNLIMITED);
+}
+
+/** A device's own limit wins; an empty (NULL) field falls back to the default. */
+export function effectiveLimits(own: Partial<Limits> | undefined, defaults: Limits): Limits {
+  return Object.fromEntries(LIMIT_KEYS.map((k) => [k, own?.[k] ?? defaults[k]])) as Limits;
+}
+
 // A few indexed SQLite reads per request (well under a millisecond), so there is no cache to invalidate.
 export function loadDevicePolicy(db: DbOrTx, deviceId: string) {
   const registry = db.select().from(models).all();
@@ -37,17 +50,6 @@ export function loadDevicePolicy(db: DbOrTx, deviceId: string) {
       .map((r) => r.id),
   );
   const row = db.select().from(devicePolicies).where(eq(devicePolicies.deviceId, deviceId)).get();
-  const limits: Limits = row
-    ? {
-        dailyRequests: row.dailyRequests,
-        weeklyRequests: row.weeklyRequests,
-        dailyTokens: row.dailyTokens,
-        weeklyTokens: row.weeklyTokens,
-        dailyCostUsd: row.dailyCostUsd,
-        weeklyCostUsd: row.weeklyCostUsd,
-        requestsPerMinute: row.requestsPerMinute,
-        maxConcurrent: row.maxConcurrent,
-      }
-    : UNLIMITED;
+  const limits = effectiveLimits(row, loadDefaultLimits(db));
   return { registry, allowedModelIds, limits };
 }

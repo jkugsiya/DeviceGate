@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "./db/client";
 import { auditEvents, deviceModels, devicePolicies, devices, deviceTokens, models, usageEvents, user } from "./db/schema";
+import { loadDefaultLimits } from "./policy/load";
 import { windowsAt } from "./policy/windows";
 
 // Read models for the admin pages. Token figures are quota tokens (input + cache writes + output);
@@ -76,6 +77,7 @@ export function deviceDetail(id: string) {
   const device = db().select().from(devices).where(eq(devices.id, id)).get();
   if (!device || device.deletedAt) return null;
   const policy = db().select().from(devicePolicies).where(eq(devicePolicies.deviceId, id)).get() ?? null;
+  const defaults = loadDefaultLimits(db());
   const allowedModelIds = new Set(
     db().select({ id: deviceModels.modelId }).from(deviceModels).where(eq(deviceModels.deviceId, id)).all().map((r) => r.id),
   );
@@ -95,7 +97,7 @@ export function deviceDetail(id: string) {
     .all();
   const now = Date.now();
   const usage = usageByDevice(now).get(id) ?? noUsage;
-  return { device, policy, allowedModelIds, registry, activeToken, recent, usage, weekStart: windowsAt(now).weekStart };
+  return { device, policy, defaults, allowedModelIds, registry, activeToken, recent, usage, weekStart: windowsAt(now).weekStart };
 }
 
 export function modelList() {

@@ -4,7 +4,7 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fmtAgo, fmtIn } from "@/lib/format";
 import type { AccountState, PoolQuota, QuotaWindow } from "@/lib/pool-quota";
-import { AccountPauseToggle } from "./forms";
+import { AccountDelete, AccountPauseToggle } from "./forms";
 
 function QuotaBar({ label, window }: { label: string; window: QuotaWindow | null }) {
   const pct = window === null ? null : Math.round(window.used * 100);
@@ -130,8 +130,11 @@ export function SubscriptionPool({ pool }: { pool: PoolQuota }) {
                         <WindowCell window={a.fable} />
                       </TableCell>
                     )}
-                    <TableCell className="text-right">
-                      <AccountPauseToggle name={a.name} paused={a.state === "disabled"} />
+                    <TableCell>
+                      <div className="flex justify-end gap-2">
+                        <AccountPauseToggle name={a.name} paused={a.state === "disabled"} />
+                        <AccountDelete name={a.name} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
