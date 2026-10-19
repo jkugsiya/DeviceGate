@@ -62,10 +62,8 @@ export const deviceModels = sqliteTable(
   (t) => [primaryKey({ columns: [t.deviceId, t.modelId] })],
 );
 
-// NULL limit = unlimited.
-export const devicePolicies = sqliteTable("device_policies", {
-  deviceId: text("device_id").primaryKey().references(() => devices.id),
-  defaultModelId: text("default_model_id").references(() => models.id),
+// The limit columns shared by a device's policy and the gateway-wide defaults.
+const limitColumns = () => ({
   dailyRequests: integer("daily_requests"),
   weeklyRequests: integer("weekly_requests"),
   dailyTokens: integer("daily_tokens"),
@@ -75,6 +73,19 @@ export const devicePolicies = sqliteTable("device_policies", {
   weeklyCostUsd: real("weekly_cost_usd"),
   requestsPerMinute: integer("requests_per_minute"),
   maxConcurrent: integer("max_concurrent"),
+});
+
+// NULL limit = use the default from default_limits.
+export const devicePolicies = sqliteTable("device_policies", {
+  deviceId: text("device_id").primaryKey().references(() => devices.id),
+  defaultModelId: text("default_model_id").references(() => models.id),
+  ...limitColumns(),
+});
+
+// Singleton row (id = 1): the limit a device gets for each field it leaves empty. NULL = unlimited.
+export const defaultLimits = sqliteTable("default_limits", {
+  id: integer("id").primaryKey(),
+  ...limitColumns(),
 });
 
 // Append-only; doubles as the request log. Never stores prompt/response bodies.

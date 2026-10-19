@@ -11,12 +11,13 @@ import {
   rotateDeviceToken,
   setDeviceStatus,
   setModelEnabled,
+  updateDefaultLimits,
   updateDeviceDetails,
   updateDevicePolicy,
 } from "@/lib/devices";
 import { createEnrollmentCode } from "@/lib/enrollment";
 import { audit } from "@/lib/audit";
-import { setAccountPaused } from "@/lib/pool-quota";
+import { removeAccount, setAccountPaused } from "@/lib/pool-quota";
 
 const id = z.uuid();
 const name = z.string().trim().min(1, "Name is required").max(60);
@@ -25,7 +26,7 @@ const notes = z
   .trim()
   .max(500)
   .transform((s) => s || null);
-// Empty input = unlimited.
+// Empty input = no limit of its own (a device inherits the default; the default is unlimited).
 const limit = z
   .string()
   .trim()
@@ -33,12 +34,12 @@ const limit = z
     if (s === "") return null;
     const n = Number(s.replaceAll(",", ""));
     if (!Number.isInteger(n) || n < 0 || n > 1e12) {
-      ctx.addIssue({ code: "custom", message: "Limits must be whole numbers ≥ 0 (leave empty for unlimited)" });
+      ctx.addIssue({ code: "custom", message: "Limits must be whole numbers of 0 or more, or empty." });
       return z.NEVER;
     }
     return n;
   });
-// Dollar amounts, rounded to cents. Empty input = unlimited.
+// Dollar amounts, rounded to cents. Empty input works like `limit`.
 const usdLimit = z
   .string()
   .trim()
@@ -46,13 +47,26 @@ const usdLimit = z
     if (s === "") return null;
     const n = Number(s.replace(/^\$/, "").replaceAll(",", ""));
     if (!Number.isFinite(n) || n < 0 || n > 1e9) {
-      ctx.addIssue({ code: "custom", message: "Spend limits must be dollar amounts ≥ 0 (leave empty for unlimited)" });
+      ctx.addIssue({ code: "custom", message: "Spend limits must be dollar amounts of 0 or more, or empty." });
       return z.NEVER;
     }
     return Math.round(n * 100) / 100;
   });
 
 const str = (f: FormData, key: string) => String(f.get(key) ?? "");
+
+const limits = z.object({
+  dailyRequests: limit,
+  weeklyRequests: limit,
+  dailyTokens: limit,
+  weeklyTokens: limit,
+  dailyCostUsd: usdLimit,
+  weeklyCostUsd: usdLimit,
+  requestsPerMinute: limit,
+  maxConcurrent: limit,
+});
+/** The raw limit fields of a limits form, keyed like `limits`, for parsing. */
+const limitFields = (f: FormData) => Object.fromEntries(Object.keys(limits.shape).map((k) => [k, str(f, k)]));
 
 /**
  * Runs a mutation and reports the outcome to the form, so every action ends in a visible toast
@@ -106,32 +120,20 @@ export async function updatePolicyAction(deviceId: string, _prev: FormResult, fo
   const input = z
     .object({
       allowedModelIds: z.array(z.string().max(40)).max(50),
-      limits: z.object({
-        dailyRequests: limit,
-        weeklyRequests: limit,
-        dailyTokens: limit,
-        weeklyTokens: limit,
-        dailyCostUsd: usdLimit,
-        weeklyCostUsd: usdLimit,
-        requestsPerMinute: limit,
-        maxConcurrent: limit,
-      }),
+      limits,
     })
-    .safeParse({
-      allowedModelIds: form.getAll("models").map(String),
-      limits: {
-        dailyRequests: str(form, "dailyRequests"),
-        weeklyRequests: str(form, "weeklyRequests"),
-        dailyTokens: str(form, "dailyTokens"),
-        weeklyTokens: str(form, "weeklyTokens"),
-        dailyCostUsd: str(form, "dailyCostUsd"),
-        weeklyCostUsd: str(form, "weeklyCostUsd"),
-        requestsPerMinute: str(form, "requestsPerMinute"),
-        maxConcurrent: str(form, "maxConcurrent"),
-      },
-    });
+    .safeParse({ allowedModelIds: form.getAll("models").map(String), limits: limitFields(form) });
   if (!input.success) return { error: input.error.issues[0].message };
   const result = run(() => updateDevicePolicy(db(), actor, id.parse(deviceId), input.data));
+  revalidatePath("/admin", "layout");
+  return result;
+}
+
+export async function updateDefaultLimitsAction(_prev: FormResult, form: FormData): Promise<FormResult> {
+  const { actor } = await requireAdmin();
+  const input = limits.safeParse(limitFields(form));
+  if (!input.success) return { error: input.error.issues[0].message };
+  const result = run(() => updateDefaultLimits(db(), actor, input.data));
   revalidatePath("/admin", "layout");
   return result;
 }
@@ -197,4 +199,18 @@ export async function setAccountPausedAction(account: string, paused: boolean, _
   });
   revalidatePath("/admin");
   return { ok: true, at: Date.now(), message: input.paused ? `${input.account} paused` : `${input.account} is back in rotation` };
+}
+
+/** Removes a TeamClaude account and its saved login. TeamClaude has no undo for this. */
+export async function removeAccountAction(account: string, _prev: FormResult): Promise<FormResult> {
+  const { actor } = await requireAdmin();
+  const name = z.string().trim().min(1).max(200).parse(account);
+  try {
+    await removeAccount(name);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not remove the account." };
+  }
+  audit(db(), actor, { action: "account.delete", targetType: "account", targetId: name });
+  revalidatePath("/admin");
+  return { ok: true, at: Date.now(), message: `${name} deleted` };
 }

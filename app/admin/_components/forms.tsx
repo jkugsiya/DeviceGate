@@ -23,12 +23,14 @@ import {
   createSetupCodeAction,
   deleteDeviceAction,
   type FormResult,
+  removeAccountAction,
   rotateTokenAction,
   setAccountPausedAction,
   type SetupResult,
   setDeviceStatusAction,
   setModelEnabledAction,
   type TokenResult,
+  updateDefaultLimitsAction,
   updateDetailsAction,
   updatePolicyAction,
 } from "../(panel)/actions";
@@ -56,6 +58,7 @@ function ConfirmAction({
   title,
   description,
   confirmLabel,
+  typeToConfirm,
 }: {
   action: (prev: FormResult) => Promise<FormResult>;
   success: string;
@@ -63,9 +66,13 @@ function ConfirmAction({
   title: string;
   description: string;
   confirmLabel: string;
+  /** Text you must type before confirming, for actions with no undo. */
+  typeToConfirm?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [typed, setTyped] = useState("");
+  const confirmed = !typeToConfirm || typed === typeToConfirm;
 
   // Called directly rather than through useActionState so the dialog can stay open, and keep its
   // button in a pending state, until the server answers. An action that redirects never returns.
@@ -79,16 +86,36 @@ function ConfirmAction({
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        setTyped("");
+      }}
+    >
       <AlertDialogTrigger render={trigger} />
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
+        {typeToConfirm && (
+          <div className="space-y-1.5">
+            <Label htmlFor="type-to-confirm">
+              Type <span className="font-mono">{typeToConfirm}</span> to confirm
+            </Label>
+            <Input
+              id="type-to-confirm"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+        )}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" disabled={pending} onClick={confirm}>
+          <AlertDialogAction variant="destructive" disabled={pending || !confirmed} onClick={confirm}>
             {pending ? "Working…" : confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -128,7 +155,9 @@ export function NewDeviceForm({ baseUrl }: { baseUrl: string }) {
       <Button type="submit" disabled={pending}>
         {pending ? "Creating…" : "Create device"}
       </Button>
-      <p className="text-xs text-muted-foreground">New devices can use every enabled model with no limits until you set some.</p>
+      <p className="text-xs text-muted-foreground">
+        New devices can use every enabled model and get the <Link href="/admin/limits" className="underline underline-offset-2">default limits</Link> until you change them.
+      </p>
     </form>
   );
 }
@@ -154,8 +183,42 @@ export function DetailsForm({ deviceId, name, notes }: { deviceId: string; name:
   );
 }
 
-// `usd` fields take dollar amounts with cents; the rest are whole numbers.
-type LimitField = { name: string; label: string; value: number | null; hint?: string; usd?: boolean };
+// `usd` fields take dollar amounts with cents; the rest are whole numbers. `fallback` is the
+// default a device gets when the field is empty; it is absent on the defaults form itself.
+export type LimitField = {
+  name: string;
+  label: string;
+  value: number | null;
+  fallback?: number | null;
+  hint?: string;
+  usd?: boolean;
+};
+
+const fmtLimit = (v: number, usd?: boolean) => (usd ? `$${v.toFixed(2)}` : v.toLocaleString("en-US"));
+
+function LimitInputs({ legend, limits }: { legend: string; limits: LimitField[] }) {
+  return (
+    <fieldset className="space-y-3">
+      <legend className="text-sm font-medium">{legend}</legend>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {limits.map((f) => (
+          <div key={f.name} className="space-y-1.5">
+            <Label htmlFor={f.name}>{f.label}</Label>
+            <Input
+              id={f.name}
+              name={f.name}
+              inputMode={f.usd ? "decimal" : "numeric"}
+              placeholder={f.fallback != null ? `Default: ${fmtLimit(f.fallback, f.usd)}` : f.usd ? "Unlimited ($)" : "Unlimited"}
+              defaultValue={f.value ?? ""}
+              className="font-mono tabular-nums"
+            />
+            {f.hint && <p className="text-xs text-muted-foreground">{f.hint}</p>}
+          </div>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 
 export function PolicyForm({
   deviceId,
@@ -188,28 +251,30 @@ export function PolicyForm({
           Claude Code uses Haiku for background tasks (titles, summaries). Blocking it can make those fail.
         </p>
       </fieldset>
-      <fieldset className="space-y-3">
-        <legend className="text-sm font-medium">Limits — leave empty for unlimited</legend>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {limits.map((f) => (
-            <div key={f.name} className="space-y-1.5">
-              <Label htmlFor={f.name}>{f.label}</Label>
-              <Input
-                id={f.name}
-                name={f.name}
-                inputMode={f.usd ? "decimal" : "numeric"}
-                placeholder={f.usd ? "Unlimited ($)" : "Unlimited"}
-                defaultValue={f.value ?? ""}
-                className="font-mono tabular-nums"
-              />
-              {f.hint && <p className="text-xs text-muted-foreground">{f.hint}</p>}
-            </div>
-          ))}
-        </div>
-      </fieldset>
+      <div className="space-y-2">
+        <LimitInputs legend="Limits: leave a field empty to use the default" limits={limits} />
+        <p className="text-xs text-muted-foreground">
+          A value here replaces the <Link href="/admin/limits" className="underline underline-offset-2">default</Link>, higher or lower.
+        </p>
+      </div>
       <InlineError state={state} />
       <Button type="submit" disabled={pending}>
         {pending ? "Saving…" : "Save access & limits"}
+      </Button>
+    </form>
+  );
+}
+
+/** The limits every device inherits for the fields it leaves empty. */
+export function DefaultLimitsForm({ limits }: { limits: LimitField[] }) {
+  const [state, action, pending] = useActionState(updateDefaultLimitsAction, null);
+  useActionToast(state, "Default limits saved");
+  return (
+    <form action={action} className="space-y-6">
+      <LimitInputs legend="Leave a field empty for no default limit" limits={limits} />
+      <InlineError state={state} />
+      <Button type="submit" disabled={pending}>
+        {pending ? "Saving…" : "Save default limits"}
       </Button>
     </form>
   );
@@ -313,5 +378,24 @@ export function AccountPauseToggle({ name, paused }: { name: string; paused: boo
         {pending ? "…" : paused ? "Resume" : "Pause"}
       </Button>
     </form>
+  );
+}
+
+/** Deletes a TeamClaude account and its saved login, after you type its name. */
+export function AccountDelete({ name }: { name: string }) {
+  return (
+    <ConfirmAction
+      action={removeAccountAction.bind(null, name)}
+      success={`Deleted ${name}`}
+      trigger={
+        <Button size="sm" variant="destructive">
+          Delete
+        </Button>
+      }
+      title={`Delete ${name}?`}
+      description="TeamClaude removes this account from rotation and deletes its saved Claude login. There is no undo: to use it again, sign in with teamclaude login. Pause it instead if you may want it back."
+      confirmLabel="Delete account"
+      typeToConfirm={name}
+    />
   );
 }

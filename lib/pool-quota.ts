@@ -199,6 +199,51 @@ export async function setAccountPaused(name: string, paused: boolean): Promise<v
   throw new Error(typeof body?.error === "string" ? `TeamClaude: ${body.error}` : `TeamClaude answered ${res.status}.`);
 }
 
+const MCP_OFF =
+  `TeamClaude doesn't allow deleting accounts yet. Add "mcp": "full" to the "proxy" section of ~/.config/teamclaude.json, then restart TeamClaude.`;
+
+// The parts of a JSON-RPC reply to `tools/call` that matter here.
+const toolReply = z.object({
+  result: z.object({ isError: z.boolean().nullish(), content: z.array(z.object({ text: z.string().nullish() })).nullish() }).nullish(),
+  error: z.object({ message: z.string() }).nullish(),
+});
+
+/**
+ * Deletes a TeamClaude account, saved login included, through the `remove_account` tool of
+ * TeamClaude's management endpoint. That endpoint is the only way TeamClaude offers, and it
+ * answers only when `proxy.mcp` is "full". Throws with a message fit for the admin when it refuses.
+ */
+export async function removeAccount(name: string): Promise<void> {
+  const { UPSTREAM_URL, UPSTREAM_API_KEY } = config();
+  let res: Response;
+  try {
+    res = await fetch(`${UPSTREAM_URL}/teamclaude/mcp`, {
+      method: "POST",
+      headers: { "x-api-key": UPSTREAM_API_KEY, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "remove_account", arguments: { account: name } },
+      }),
+      signal: AbortSignal.timeout(10_000),
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error("TeamClaude isn't reachable.");
+  }
+  // 404: the endpoint is off, or this TeamClaude predates it.
+  if (res.status === 404) throw new Error(MCP_OFF);
+  if (res.status === 401 || res.status === 403) throw new Error("TeamClaude rejected UPSTREAM_API_KEY.");
+  const reply = toolReply.safeParse(await res.json().catch(() => null));
+  if (!res.ok || !reply.success) throw new Error(`TeamClaude answered ${res.status}.`);
+  const { result, error } = reply.data;
+  // In "read" mode the write tools aren't listed, so the call fails as an unknown tool.
+  if (error) throw new Error(error.message.startsWith("Unknown tool") ? MCP_OFF : `TeamClaude: ${error.message}`);
+  if (result?.isError) throw new Error(`TeamClaude: ${result.content?.[0]?.text ?? "the account wasn't deleted."}`);
+  delete cache.__poolQuota;
+}
+
 const CACHE_MS = 30_000;
 // Shared by the admin and the public page, so page views never fan out into TeamClaude calls.
 const cache = globalThis as unknown as { __poolQuota?: { at: number; value: Promise<PoolQuota> } };

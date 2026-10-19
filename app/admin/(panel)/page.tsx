@@ -55,8 +55,9 @@ export default async function OverviewPage({ searchParams }: PageProps<"/admin">
   const { devices: allDevices, totals, windows } = dashboardData();
   const pool = await poolQuota();
   const dir = one(params, "ddir") === "asc" ? "asc" : "desc";
-  const sort = one(params, "dsort") || "name";
-  const devices = sortDevices(allDevices, sort, sort === "name" ? (dir === "asc" ? "asc" : "desc") : dir);
+  // Heaviest users first: this week's spend is what an admin opens the overview to check.
+  const sort = one(params, "dsort") || "weekCost";
+  const devices = sortDevices(allDevices, sort, dir);
   const byModel = usageByModel(
     { from: windows.weekStart, to: null },
     one(params, "msort") === "requests" || one(params, "msort") === "tokens" || one(params, "msort") === "name"

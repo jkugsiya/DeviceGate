@@ -37,7 +37,8 @@ one used it. DeviceGate gives you:
 - **Per-device model access.** Allow Opus on your workstation and only Haiku on the automation box.
   Models match by family prefix, so new model versions are covered without code changes.
 - **Per-device limits.** Daily and weekly request, token and spend (USD, at API rates) quotas,
-  requests per minute, and concurrent requests. When a limit is hit, Claude Code shows a readable error with the reset time.
+  requests per minute, and concurrent requests. Set defaults once on the **Limits** page; each
+  device uses them for any limit it leaves empty. When a limit is hit, Claude Code shows a readable error with the reset time.
 - **Usage and cost tracking.** Input, output and cache tokens for every request, plus what they
   would have cost at API rates. Break it down by device, model and day, filter it, and bookmark or
   share the view as a URL.
@@ -289,6 +290,8 @@ all an update needs. Watch it come up with `journalctl --user -u devicegate -n 3
 | --- | --- |
 | Add or reconnect a PC | Admin → **Add device**, or device page → **Generate setup code** |
 | Set models and limits for a PC | Device page → **Access & limits** |
+| Set limits for every PC | Admin → **Limits** |
+| Delete a Claude account | Overview → account row → **Delete**. Needs `"mcp": "full"` in the `proxy` section of `teamclaude.json`. |
 | Block a PC right now | Device page → **Disable device** |
 | See who did what | Admin → **Audit log** |
 | See where the capacity went | Admin → **Usage** |

@@ -17,11 +17,17 @@ All notable changes to this project are documented here. The format follows
   Accounts are numbered ("Account 1", "Account 2"…), never named.
 - Pause and Resume buttons for each account on the admin overview, through TeamClaude's
   `POST /teamclaude/disable`. Each change is recorded in the audit log.
+- Delete button for each account on the admin overview, through the `remove_account` tool of
+  TeamClaude's management endpoint. You type the account's name to confirm. TeamClaude only
+  allows it with `"mcp": "full"` in the `proxy` section of `teamclaude.json`; the error says so.
+- Default limits on a new **Limits** admin page. A device uses the default for every limit it
+  leaves empty, and its own value replaces the default, higher or lower.
 - README section on running several of your own Claude accounts through TeamClaude, and on
   `teamclaude probe` for keeping idle accounts' figures fresh.
 
 ### Changed
 
+- The overview's device table sorts by this week's spend, highest first, instead of by name.
 - Capacity figures no longer depend on recent traffic through DeviceGate. The response-header
   reading is kept only as a fallback when TeamClaude's quota endpoint is unavailable.
 
@@ -32,6 +38,7 @@ All notable changes to this project are documented here. The format follows
   them on its next start.
 - The admin's enable/disable toasts for devices and models named the opposite of what had just
   happened.
+- Sorting a table in the admin no longer scrolls the page back to the top.
 
 ## [0.1.0] - 2026-09-28
 

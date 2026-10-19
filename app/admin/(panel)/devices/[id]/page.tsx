@@ -7,8 +7,10 @@ import { deviceDetail } from "@/lib/admin-queries";
 import { publicBaseUrl } from "@/lib/config";
 import { fmtAgo, fmtDateTime, fmtNumber, fmtTokens, fmtUsd, modelLabel } from "@/lib/format";
 import { TIME_ZONE, zoneLabel } from "@/lib/timezone";
+import { effectiveLimits } from "@/lib/policy/load";
 import { dailySeries, usageByModel } from "@/lib/usage-queries";
 import { ConnectDevice, DetailsForm, DeviceControls, PolicyForm } from "../../../_components/forms";
+import { limitFields } from "../../../_components/limit-fields";
 import { one } from "../../../_components/query";
 import { StatCard } from "../../../_components/stats";
 import { UsageChart } from "../../../_components/usage-chart";
@@ -52,7 +54,8 @@ export default async function DevicePage({ params, searchParams }: PageProps<"/a
   const sp = await searchParams;
   const detail = deviceDetail(id);
   if (!detail) notFound();
-  const { device, policy, allowedModelIds, registry, activeToken, recent, usage, weekStart } = detail;
+  const { device, policy, defaults, allowedModelIds, registry, activeToken, recent, usage, weekStart } = detail;
+  const limits = effectiveLimits(policy ?? undefined, defaults);
   const scope = { from: weekStart, to: null, deviceId: id };
   const msort = one(sp, "msort");
   const byModel = usageByModel(
@@ -112,16 +115,7 @@ export default async function DevicePage({ params, searchParams }: PageProps<"/a
               <PolicyForm
                 deviceId={device.id}
                 models={registry.map((m) => ({ id: m.id, displayName: m.displayName, enabled: m.enabled, allowed: allowedModelIds.has(m.id) }))}
-                limits={[
-                  { name: "dailyTokens", label: "Tokens per day", value: policy?.dailyTokens ?? null, hint: "A fresh Claude Code session uses ~40–60K tokens on its first request." },
-                  { name: "weeklyTokens", label: "Tokens per week", value: policy?.weeklyTokens ?? null },
-                  { name: "dailyCostUsd", label: "Spend per day (USD)", value: policy?.dailyCostUsd ?? null, usd: true, hint: "API-equivalent cost at Anthropic's public rates, as shown in usage." },
-                  { name: "weeklyCostUsd", label: "Spend per week (USD)", value: policy?.weeklyCostUsd ?? null, usd: true },
-                  { name: "dailyRequests", label: "Requests per day", value: policy?.dailyRequests ?? null },
-                  { name: "weeklyRequests", label: "Requests per week", value: policy?.weeklyRequests ?? null },
-                  { name: "requestsPerMinute", label: "Requests per minute", value: policy?.requestsPerMinute ?? null },
-                  { name: "maxConcurrent", label: "Concurrent requests", value: policy?.maxConcurrent ?? null, hint: "Subagents run in parallel; keep this ≥ 3 for normal use." },
-                ]}
+                limits={limitFields(policy, defaults)}
               />
             </CardContent>
           </Card>
@@ -133,12 +127,12 @@ export default async function DevicePage({ params, searchParams }: PageProps<"/a
               <CardTitle>Against its limits</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-4">
-              <UsageStat label="Tokens today" used={usage.dayTokens} limit={policy?.dailyTokens} unit="tokens" />
-              <UsageStat label="Requests today" used={usage.dayRequests} limit={policy?.dailyRequests} unit="requests" />
-              <UsageStat label="Tokens this week" used={usage.weekTokens} limit={policy?.weeklyTokens} unit="tokens" />
-              <UsageStat label="Requests this week" used={usage.weekRequests} limit={policy?.weeklyRequests} unit="requests" />
-              <UsageStat label="Spend today" used={usage.dayCost} limit={policy?.dailyCostUsd} unit="usd" />
-              <UsageStat label="Spend this week" used={usage.weekCost} limit={policy?.weeklyCostUsd} unit="usd" />
+              <UsageStat label="Tokens today" used={usage.dayTokens} limit={limits.dailyTokens} unit="tokens" />
+              <UsageStat label="Requests today" used={usage.dayRequests} limit={limits.dailyRequests} unit="requests" />
+              <UsageStat label="Tokens this week" used={usage.weekTokens} limit={limits.weeklyTokens} unit="tokens" />
+              <UsageStat label="Requests this week" used={usage.weekRequests} limit={limits.weeklyRequests} unit="requests" />
+              <UsageStat label="Spend today" used={usage.dayCost} limit={limits.dailyCostUsd} unit="usd" />
+              <UsageStat label="Spend this week" used={usage.weekCost} limit={limits.weeklyCostUsd} unit="usd" />
             </CardContent>
           </Card>
           <Card>
