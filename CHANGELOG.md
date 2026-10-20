@@ -48,6 +48,8 @@ All notable changes to this project are documented here. The format follows
 - A rejected save on a device's access, limits or details, or on the default limits, keeps your
   edits instead of clearing the form.
 - Disabled Previous and Next buttons can no longer be followed with the keyboard.
+- Changing the chart's range or metric on the status page updates it in place. It used to reload
+  the whole page and jump to the top.
 
 ## [0.1.0] - 2026-09-28
 
