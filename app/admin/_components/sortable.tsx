@@ -8,7 +8,8 @@ export type SortDir = "asc" | "desc";
 
 /**
  * A column header that sorts by linking, so sorting works without client JS and every sorted view
- * is a shareable URL. Clicking the active column flips direction.
+ * is a shareable URL. Clicking the active column flips direction. Sorting keeps your scroll position
+ * and replaces the history entry, so Back leaves the page instead of undoing each sort.
  */
 export function SortableHead({
   column,
@@ -44,7 +45,7 @@ export function SortableHead({
     >
       <Link
         href={hrefWith(pathname, params, { [sortParam]: column, [dirParam]: nextDir })}
-        // Re-sorting keeps the table where you are instead of jumping to the top of the page.
+        replace
         scroll={false}
         className={cn(
           "inline-flex items-center gap-1 rounded-sm transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +45,24 @@ function InlineError({ state }: { state: FormResult | TokenResult | SetupResult 
       {state.error}
     </p>
   );
+}
+
+/**
+ * Submits an edit form without React's automatic reset, which would wipe your changes when the
+ * server rejects them. After a successful save the form resets to the freshly saved values. Keep
+ * `action` on the form too: it still posts there before the page's JS loads.
+ */
+function useKeepEdits(state: FormResult, dispatch: (form: FormData) => void) {
+  const ref = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (state && "ok" in state) ref.current?.reset();
+  }, [state]);
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    startTransition(() => dispatch(form));
+  };
+  return { ref, onSubmit };
 }
 
 /**
@@ -165,8 +183,9 @@ export function NewDeviceForm({ baseUrl }: { baseUrl: string }) {
 export function DetailsForm({ deviceId, name, notes }: { deviceId: string; name: string; notes: string | null }) {
   const [state, action, pending] = useActionState(updateDetailsAction.bind(null, deviceId), null);
   useActionToast(state, "Details saved");
+  const form = useKeepEdits(state, action);
   return (
-    <form action={action} className="space-y-4">
+    <form action={action} {...form} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="name">Name</Label>
         <Input id="name" name="name" defaultValue={name} required maxLength={60} />
@@ -231,8 +250,9 @@ export function PolicyForm({
 }) {
   const [state, action, pending] = useActionState(updatePolicyAction.bind(null, deviceId), null);
   useActionToast(state, "Access & limits saved");
+  const form = useKeepEdits(state, action);
   return (
-    <form action={action} className="space-y-6">
+    <form action={action} {...form} className="space-y-6">
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium">Allowed models</legend>
         <div className="flex flex-wrap gap-2">
@@ -269,8 +289,9 @@ export function PolicyForm({
 export function DefaultLimitsForm({ limits }: { limits: LimitField[] }) {
   const [state, action, pending] = useActionState(updateDefaultLimitsAction, null);
   useActionToast(state, "Default limits saved");
+  const form = useKeepEdits(state, action);
   return (
-    <form action={action} className="space-y-6">
+    <form action={action} {...form} className="space-y-6">
       <LimitInputs legend="Leave a field empty for no default limit" limits={limits} />
       <InlineError state={state} />
       <Button type="submit" disabled={pending}>

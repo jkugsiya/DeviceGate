@@ -3,7 +3,7 @@
 import { XIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -35,6 +35,35 @@ export type FilterBarProps = {
 };
 
 /**
+ * Local mirror of a URL value so typing stays responsive. `commit` runs once you pause for `delay`
+ * ms, and the draft follows the URL again whenever you aren't mid-edit.
+ */
+function useDraft(urlValue: string, commit: (value: string) => void, delay: number) {
+  const [draft, setDraft] = useState(urlValue);
+  const editing = useRef(false);
+  const onCommit = useEffectEvent(commit);
+
+  useEffect(() => {
+    if (!editing.current) setDraft(urlValue);
+  }, [urlValue]);
+
+  useEffect(() => {
+    if (!editing.current) return;
+    const id = setTimeout(() => {
+      editing.current = false;
+      if (draft !== urlValue) onCommit(draft);
+    }, delay);
+    return () => clearTimeout(id);
+  }, [draft, urlValue, delay]);
+
+  const edit = (value: string) => {
+    editing.current = true;
+    setDraft(value);
+  };
+  return [draft, edit] as const;
+}
+
+/**
  * Every control writes to the URL, so the server components below re-render with new data and each
  * view stays a shareable link.
  */
@@ -54,30 +83,21 @@ export function FilterBar({ range, fromKey, devices, models, lockedModel }: Filt
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
 
-  // Local mirror so typing stays responsive; the URL catches up once you pause.
-  const [q, setQ] = useState(params.get("q") ?? "");
   const urlQ = params.get("q") ?? "";
-  const typing = useRef(false);
-
-  useEffect(() => {
-    if (!typing.current) setQ(urlQ);
-  }, [urlQ]);
-
-  useEffect(() => {
-    if (!typing.current) return;
-    const id = setTimeout(() => {
-      typing.current = false;
-      if (q !== urlQ) setParams({ q: q || null });
-    }, 300);
-    return () => clearTimeout(id);
-    // setParams closes over the current params, which is exactly what we want on each keystroke.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, urlQ]);
+  const [q, setQ] = useDraft(urlQ, (v) => setParams({ q: v || null }), 300);
 
   const device = params.get("device") ?? "";
   const model = lockedModel ?? params.get("model") ?? "";
   const outcome = params.get("outcome") ?? "";
   const custom = !!(fromKey && params.get("from")) || !!params.get("to");
+  // Typing a year into a date field produces a valid date per digit (0002, 0020, 0202), so dates
+  // wait for a pause too instead of reloading the results on every keystroke.
+  const [from, setFrom] = useDraft(params.get("from") ?? (custom ? fromKey : ""), (v) => setParams({ from: v || null, range: null }), 600);
+  const [to, setTo] = useDraft(params.get("to") ?? "", (v) => setParams({ to: v || null, range: null }), 600);
+  // Leaving the model page keeps every other filter, so you land on the same slice of usage.
+  const withoutModel = new URLSearchParams(params.toString());
+  withoutModel.delete("model");
+  withoutModel.delete("page");
   const activeCount = [device, lockedModel ? "" : model, outcome, urlQ].filter(Boolean).length;
 
   const selectClass =
@@ -114,9 +134,9 @@ export function FilterBar({ range, fromKey, devices, models, lockedModel }: Filt
             <Input
               id="from"
               type="date"
-              value={params.get("from") ?? (custom ? fromKey : "")}
-              max={params.get("to") || undefined}
-              onChange={(e) => setParams({ from: e.target.value || null, range: null })}
+              value={from}
+              max={to || undefined}
+              onChange={(e) => setFrom(e.target.value)}
               className="h-8 w-[9.5rem]"
             />
           </div>
@@ -127,9 +147,9 @@ export function FilterBar({ range, fromKey, devices, models, lockedModel }: Filt
             <Input
               id="to"
               type="date"
-              value={params.get("to") ?? ""}
-              min={params.get("from") || undefined}
-              onChange={(e) => setParams({ to: e.target.value || null, range: null })}
+              value={to}
+              min={from || undefined}
+              onChange={(e) => setTo(e.target.value)}
               className="h-8 w-[9.5rem]"
             />
           </div>
@@ -144,10 +164,7 @@ export function FilterBar({ range, fromKey, devices, models, lockedModel }: Filt
       <div className="flex flex-wrap items-center gap-2">
         <Input
           value={q}
-          onChange={(e) => {
-            typing.current = true;
-            setQ(e.target.value);
-          }}
+          onChange={(e) => setQ(e.target.value)}
           placeholder="Search model, device, IP or request id…"
           aria-label="Search requests"
           className="h-8 w-full sm:w-80"
@@ -197,7 +214,11 @@ export function FilterBar({ range, fromKey, devices, models, lockedModel }: Filt
         {lockedModel && (
           <Badge variant="secondary" className="gap-1">
             {modelLabel(lockedModel)}
-            <Link href="/admin/usage" aria-label="Remove model filter" className="hover:text-foreground">
+            <Link
+              href={withoutModel.size ? `/admin/usage?${withoutModel}` : "/admin/usage"}
+              aria-label="Remove model filter"
+              className="hover:text-foreground"
+            >
               <XIcon className="size-3" />
             </Link>
           </Badge>
@@ -205,6 +226,8 @@ export function FilterBar({ range, fromKey, devices, models, lockedModel }: Filt
         {activeCount > 0 && (
           <Link
             href={pathname}
+            replace
+            scroll={false}
             className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "ml-auto text-muted-foreground")}
           >
             Reset filters

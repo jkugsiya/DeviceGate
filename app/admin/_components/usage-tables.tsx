@@ -5,7 +5,7 @@ import { fmtDateTime, fmtNumber, fmtPct, fmtTokens, fmtUsd, modelLabel } from "@
 import { ratesFor } from "@/lib/pricing";
 import { zoneLabel } from "@/lib/timezone";
 import type { BreakdownRow, RequestRow } from "@/lib/usage-queries";
-import type { Params } from "./query";
+import { hrefWith, type Params } from "./query";
 import { SortableHead, type SortDir } from "./sortable";
 
 const shell = "overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10";
@@ -189,7 +189,10 @@ export function RequestsTable({
               )}
               <TableCell className="whitespace-nowrap">
                 {r.model ? (
-                  <Link href={`/admin/usage/models/${encodeURIComponent(r.model)}`} className="hover:underline">
+                  <Link
+                    href={hrefWith(`/admin/usage/models/${encodeURIComponent(r.model)}`, params, { model: null })}
+                    className="hover:underline"
+                  >
                     {modelLabel(r.model)}
                   </Link>
                 ) : (
