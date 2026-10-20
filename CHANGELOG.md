@@ -38,7 +38,16 @@ All notable changes to this project are documented here. The format follows
   them on its next start.
 - The admin's enable/disable toasts for devices and models named the opposite of what had just
   happened.
-- Sorting a table in the admin no longer scrolls the page back to the top.
+- Sorting a table in the admin no longer scrolls the page back to the top, and no longer adds a
+  Back-button step for every click.
+- Paging the request log no longer jumps to the top of the page; each page opens at the top of
+  the table. Resetting filters keeps your scroll position.
+- Opening a model from the usage page keeps your date range and filters, and so does going back.
+  "Show all time" on an empty model page stays on that model.
+- Typing a year into a date filter reloads the results once, not once per digit.
+- A rejected save on a device's access, limits or details, or on the default limits, keeps your
+  edits instead of clearing the form.
+- Disabled Previous and Next buttons can no longer be followed with the keyboard.
 
 ## [0.1.0] - 2026-09-28
 

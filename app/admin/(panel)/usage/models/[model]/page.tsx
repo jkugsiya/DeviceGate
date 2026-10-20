@@ -17,7 +17,7 @@ import {
 } from "@/lib/usage-queries";
 import { FilterBar } from "../../../../_components/filter-bar";
 import { Pager } from "../../../../_components/pager";
-import { one } from "../../../../_components/query";
+import { hrefWith, one } from "../../../../_components/query";
 import { StatCard } from "../../../../_components/stats";
 import { UsageChart } from "../../../../_components/usage-chart";
 import { BreakdownTable, RequestsTable } from "../../../../_components/usage-tables";
@@ -44,7 +44,10 @@ export default async function ModelUsagePage({ params: routeParams, searchParams
     <div className="space-y-8">
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
-          <Link href="/admin/usage" className="text-sm text-muted-foreground hover:text-foreground">
+          <Link
+            href={hrefWith("/admin/usage", params, { model: null })}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
             ← Usage
           </Link>
         </div>
@@ -106,7 +109,12 @@ export default async function ModelUsagePage({ params: routeParams, searchParams
             <p className="max-w-sm text-sm text-muted-foreground">
               Nothing in the selected range. Try widening the dates.
             </p>
-            <Link href="/admin/usage?range=all" className={buttonVariants({ size: "sm", variant: "outline" })}>
+            <Link
+              href={hrefWith(pathname, params, { range: "all", from: null, to: null })}
+              replace
+              scroll={false}
+              className={buttonVariants({ size: "sm", variant: "outline" })}
+            >
               Show all time
             </Link>
           </Card>
@@ -136,14 +144,15 @@ export default async function ModelUsagePage({ params: routeParams, searchParams
         </CardContent>
       </Card>
 
-      <section className="space-y-3">
+      {/* scroll-mt clears the sticky header when the pager jumps here. */}
+      <section id="requests" className="scroll-mt-20 space-y-3">
         <h2 className="font-heading text-lg font-semibold">Requests</h2>
         {log.total === 0 ? (
           <p className="text-sm text-muted-foreground">No requests match these filters.</p>
         ) : (
           <>
             <RequestsTable rows={log.rows} sort={requestSort} dir={dir} pathname={pathname} params={params} />
-            <Pager page={log.page} pages={log.pages} total={log.total} pathname={pathname} params={params} />
+            <Pager page={log.page} pages={log.pages} total={log.total} pathname={pathname} params={params} anchor="requests" />
           </>
         )}
       </section>

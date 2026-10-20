@@ -20,7 +20,7 @@ import {
 } from "@/lib/usage-queries";
 import { FilterBar } from "../../_components/filter-bar";
 import { Pager } from "../../_components/pager";
-import { one, type Params } from "../../_components/query";
+import { hrefWith, one, type Params } from "../../_components/query";
 import type { SortDir } from "../../_components/sortable";
 import { StatCard } from "../../_components/stats";
 import { UsageChart } from "../../_components/usage-chart";
@@ -145,7 +145,7 @@ export default async function UsagePage({ searchParams }: PageProps<"/admin/usag
           dirParam="mdir"
           pathname="/admin/usage"
           params={params}
-          hrefFor={(r) => `/admin/usage/models/${encodeURIComponent(r.key)}`}
+          hrefFor={(r) => hrefWith(`/admin/usage/models/${encodeURIComponent(r.key)}`, params, { model: null })}
           linkLabel="Open"
         />
       </section>
@@ -166,14 +166,15 @@ export default async function UsagePage({ searchParams }: PageProps<"/admin/usag
         />
       </section>
 
-      <section className="space-y-3">
+      {/* scroll-mt clears the sticky header when the pager jumps here. */}
+      <section id="requests" className="scroll-mt-20 space-y-3">
         <h2 className="font-heading text-lg font-semibold">Requests</h2>
         {log.total === 0 ? (
           <p className="text-sm text-muted-foreground">No requests match these filters.</p>
         ) : (
           <>
             <RequestsTable rows={log.rows} sort={requestSort} dir={dir} pathname="/admin/usage" params={params} />
-            <Pager page={log.page} pages={log.pages} total={log.total} pathname="/admin/usage" params={params} />
+            <Pager page={log.page} pages={log.pages} total={log.total} pathname="/admin/usage" params={params} anchor="requests" />
           </>
         )}
       </section>
