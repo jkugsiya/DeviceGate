@@ -89,6 +89,23 @@ function combine(parts: { weight: number; window: QuotaWindow | null }[]): Quota
 }
 
 /**
+ * An account's 5-hour window as far as it can actually serve. An account at its limit (often its
+ * weekly one) can't use the 5-hour room it has left, so it counts as fully used until it can take
+ * traffic again: the latest reset among its spent windows. Without this the pool headline shows
+ * headroom while every account is refusing requests.
+ */
+function usableFiveHour(account: PoolAccount): QuotaWindow | null {
+  const { fiveHour, weekly, state } = account;
+  if (state !== "exhausted" || !fiveHour) return fiveHour;
+  let resetAt: Date | null = null;
+  for (const w of [fiveHour, weekly]) {
+    if (w && w.used >= 1 && w.resetAt && (!resetAt || w.resetAt > resetAt)) resetAt = w.resetAt;
+  }
+  // TeamClaude can mark an account exhausted before either reading reaches 100%.
+  return { used: 1, resetAt: resetAt ?? fiveHour.resetAt };
+}
+
+/**
  * Turns a `/teamclaude/quota` payload into per-account rows and pool totals.
  *
  * The totals are computed here rather than taken from TeamClaude's `aggregate`, which also counts
@@ -124,7 +141,7 @@ export function parsePool(json: unknown, now = new Date()): PoolQuota {
 
   return {
     source: "teamclaude",
-    fiveHour: combine(weighted.map(({ account, weight }) => ({ weight, window: account.fiveHour }))),
+    fiveHour: combine(weighted.map(({ account, weight }) => ({ weight, window: usableFiveHour(account) }))),
     weekly: combine(weighted.map(({ account, weight }) => ({ weight, window: account.weekly }))),
     accounts: accounts.map((a) => a.account),
     updatedAt: now,

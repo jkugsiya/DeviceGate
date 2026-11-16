@@ -78,6 +78,19 @@ describe("parsePool", () => {
     expect(none.fiveHour?.used).toBeCloseTo(0.4, 10);
   });
 
+  it("counts no 5-hour room on an account that is at a limit, until that limit resets", () => {
+    const pool = parsePool({
+      accounts: [
+        account("five-hour-out", {}, { fiveHour: b(1, T0 + HOUR), weeklyShared: b(0.7, T0 + 48 * HOUR, "unified7d") }),
+        account("week-out", {}, { fiveHour: b(0.03, T0 + 2 * HOUR), weeklyShared: b(1, T0 + 20 * HOUR, "unified7d") }),
+      ],
+    });
+    // Nothing can serve, so nothing is left, and capacity returns when the first account frees up.
+    expect(pool.fiveHour).toEqual({ used: 1, resetAt: new Date(T0 + HOUR) });
+    // The weekly figure is still a budget: the first account has room once its 5-hour window resets.
+    expect(pool.weekly?.used).toBeCloseTo(0.85, 10);
+  });
+
   it("shows a Fable bucket only where the account reports its own", () => {
     const pool = parsePool({
       accounts: [account("own", {}, { weeklyFable: b(0.7, T0, "unified7dFable") }), account("shared")],
