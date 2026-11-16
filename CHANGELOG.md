@@ -33,6 +33,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The 5-hour pool total no longer shows headroom while every account refuses requests. An
+  account at its weekly limit used to count the 5-hour room it couldn't use; it now counts as
+  used up until it can serve again, and the headline says "Used up" at 0%.
 - Claude Haiku 5.5 is priced: $0.10 / $0.50 per million input / output tokens, or $0.50 / $2.50
   once the prompt passes 100K tokens. Its requests used to record no cost. The gateway prices
   them on its next start.

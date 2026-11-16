@@ -70,7 +70,7 @@ function Capacity({ label, remaining, reset }: { label: string; remaining: numbe
       </div>
       <p className="text-sm text-muted-foreground">
         {/* Status is never colour alone: low capacity says so in words. */}
-        {low && <span className="font-medium text-destructive">Running low · </span>}
+        {low && <span className="font-medium text-destructive">{pct === 0 ? "Used up" : "Running low"} · </span>}
         {reset ? `Resets ${fmtIn(reset)}` : "No usage recorded yet"}
       </p>
     </div>
